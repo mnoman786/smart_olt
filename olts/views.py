@@ -45,7 +45,7 @@ def olt_list(request):
 @login_required
 def olt_detail(request, pk):
     olt = get_object_or_404(OLT, pk=pk)
-    pon_ports = olt.pon_ports.annotate(ont_count=Count('onts'))
+    pon_ports = olt.pon_ports.all()
     recent_events = Event.objects.filter(olt=olt).select_related('ont').order_by('-timestamp')[:20]
     return render(request, 'olts/detail.html', {
         'olt': olt,
