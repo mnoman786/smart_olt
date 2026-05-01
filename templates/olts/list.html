@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+{% block title %}OLTs{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item active">OLTs</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-server me-2 text-primary"></i>OLT Management</h4>
+    <p class="page-subtitle">Manage your ZTE and Huawei Optical Line Terminals</p>
+  </div>
+  {% if request.user.profile.is_operator %}
+  <a href="{% url 'olt_create' %}" class="btn btn-primary">
+    <i class="fa-solid fa-plus me-1"></i> Add OLT
+  </a>
+  {% endif %}
+</div>
+
+<!-- Filters -->
+<div class="card card-styled mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+          <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Search name, IP, location...">
+        </div>
+      </div>
+      <div class="col-auto">
+        <select name="vendor" class="form-select form-select-sm">
+          <option value="">All Vendors</option>
+          <option value="ZTE" {% if vendor_filter == 'ZTE' %}selected{% endif %}>ZTE</option>
+          <option value="HUAWEI" {% if vendor_filter == 'HUAWEI' %}selected{% endif %}>Huawei</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Status</option>
+          <option value="online" {% if status_filter == 'online' %}selected{% endif %}>Online</option>
+          <option value="offline" {% if status_filter == 'offline' %}selected{% endif %}>Offline</option>
+          <option value="warning" {% if status_filter == 'warning' %}selected{% endif %}>Warning</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+        <a href="{% url 'olt_list' %}" class="btn btn-sm btn-outline-secondary ms-1">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- OLT Grid -->
+<div class="row g-3">
+  {% for olt in olts %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card card-styled olt-card h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between mb-3">
+          <div>
+            <span class="badge {{ olt.vendor_badge_class }} mb-1">{{ olt.vendor }} {{ olt.model }}</span>
+            <h6 class="mb-0 fw-bold">
+              <a href="{% url 'olt_detail' olt.pk %}" class="text-decoration-none text-dark">{{ olt.name }}</a>
+            </h6>
+            <small class="text-muted"><i class="fa-solid fa-location-dot me-1"></i>{{ olt.location|default:"—" }}</small>
+          </div>
+          <span class="badge {{ olt.status_badge_class }} px-2 py-1">
+            <i class="fa-solid fa-circle me-1" style="font-size:0.6rem;"></i>{{ olt.get_status_display }}
+          </span>
+        </div>
+
+        <div class="row g-2 mb-3 text-center">
+          <div class="col-4">
+            <div class="metric-box">
+              <div class="metric-value text-primary">{{ olt.ont_count }}</div>
+              <div class="metric-label">Total ONTs</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="metric-box">
+              <div class="metric-value text-success">{{ olt.online_ont_count }}</div>
+              <div class="metric-label">Online</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="metric-box">
+              <div class="metric-value text-danger">{{ olt.offline_ont_count }}</div>
+              <div class="metric-label">Offline</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-1 mb-3" style="font-size:0.8rem;">
+          <div class="col-6">
+            <div class="text-muted">IP Address</div>
+            <div class="fw-medium font-monospace">{{ olt.ip_address }}</div>
+          </div>
+          <div class="col-6">
+            <div class="text-muted">Uptime</div>
+            <div class="fw-medium">{{ olt.uptime_formatted }}</div>
+          </div>
+          {% if olt.status != 'offline' %}
+          <div class="col-4">
+            <div class="text-muted mt-1">CPU</div>
+            <div class="progress mt-1" style="height:6px;" title="{{ olt.cpu_usage }}%">
+              <div class="progress-bar {% if olt.cpu_usage > 80 %}bg-danger{% elif olt.cpu_usage > 60 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ olt.cpu_usage }}%"></div>
+            </div>
+            <small class="text-muted">{{ olt.cpu_usage }}%</small>
+          </div>
+          <div class="col-4">
+            <div class="text-muted mt-1">RAM</div>
+            <div class="progress mt-1" style="height:6px;" title="{{ olt.memory_usage }}%">
+              <div class="progress-bar {% if olt.memory_usage > 85 %}bg-danger{% elif olt.memory_usage > 65 %}bg-warning{% else %}bg-info{% endif %}" style="width:{{ olt.memory_usage }}%"></div>
+            </div>
+            <small class="text-muted">{{ olt.memory_usage }}%</small>
+          </div>
+          <div class="col-4">
+            <div class="text-muted mt-1">Temp</div>
+            <div class="fw-medium mt-1 {% if olt.temperature > 55 %}text-danger{% elif olt.temperature > 45 %}text-warning{% else %}text-success{% endif %}">
+              <i class="fa-solid fa-temperature-half me-1"></i>{{ olt.temperature }}°C
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="d-flex gap-2">
+          <a href="{% url 'olt_detail' olt.pk %}" class="btn btn-sm btn-primary flex-grow-1">
+            <i class="fa-solid fa-eye me-1"></i>Details
+          </a>
+          {% if request.user.profile.is_operator %}
+          <a href="{% url 'olt_edit' olt.pk %}" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-pen"></i>
+          </a>
+          {% endif %}
+          {% if request.user.profile.is_admin %}
+          <a href="{% url 'olt_delete' olt.pk %}" class="btn btn-sm btn-outline-danger">
+            <i class="fa-solid fa-trash"></i>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12">
+    <div class="empty-state">
+      <i class="fa-solid fa-server"></i>
+      <h5>No OLTs Found</h5>
+      <p class="text-muted">{% if search %}No OLTs match your search.{% else %}Start by adding your first OLT.{% endif %}</p>
+      {% if request.user.profile.is_operator %}
+      <a href="{% url 'olt_create' %}" class="btn btn-primary mt-2"><i class="fa-solid fa-plus me-1"></i>Add OLT</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

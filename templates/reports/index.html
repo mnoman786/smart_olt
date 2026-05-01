@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}Reports{% endblock %}
+{% block breadcrumbs %}<li class="breadcrumb-item active">Reports</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-file-chart-column me-2 text-primary"></i>Reports & Analytics</h4>
+    <p class="page-subtitle">Generate and export network reports</p>
+  </div>
+</div>
+
+<!-- Report Type Tabs -->
+<div class="card card-styled mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label fw-medium">Report Type</label>
+        <select name="type" class="form-select" onchange="this.form.submit()">
+          <option value="ont_status" {% if report_type == 'ont_status' %}selected{% endif %}>ONT Status Report</option>
+          <option value="signal" {% if report_type == 'signal' %}selected{% endif %}>Signal Quality Report</option>
+          <option value="events" {% if report_type == 'events' %}selected{% endif %}>Events Report</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-medium">OLT Filter</label>
+        <select name="olt" class="form-select">
+          <option value="">All OLTs</option>
+          {% for olt in olts %}
+          <option value="{{ olt.pk }}" {% if olt_id == olt.pk|stringformat:"s" %}selected{% endif %}>{{ olt.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if report_type == 'events' %}
+      <div class="col-md-2">
+        <label class="form-label fw-medium">From Date</label>
+        <input type="date" name="from" value="{{ date_from }}" class="form-control">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-medium">To Date</label>
+        <input type="date" name="to" value="{{ date_to }}" class="form-control">
+      </div>
+      {% endif %}
+      <div class="col-auto d-flex align-items-end gap-2">
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass me-1"></i>Generate</button>
+        <a href="{% url 'reports_export' %}?type={{ report_type }}&olt={{ olt_id }}" class="btn btn-outline-success">
+          <i class="fa-solid fa-file-csv me-1"></i>Export CSV
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ONT Status Report -->
+{% if report_type == 'ont_status' %}
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="stat-card stat-green">
+      <div class="stat-icon"><i class="fa-solid fa-circle-check"></i></div>
+      <div class="stat-body"><div class="stat-value">{{ online_count }}</div><div class="stat-label">Online ONTs</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card stat-red">
+      <div class="stat-icon"><i class="fa-solid fa-circle-xmark"></i></div>
+      <div class="stat-body"><div class="stat-value">{{ offline_count }}</div><div class="stat-label">Offline ONTs</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card stat-orange">
+      <div class="stat-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <div class="stat-body"><div class="stat-value">{{ fault_count }}</div><div class="stat-label">Fault ONTs</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="card card-styled">
+  <div class="card-header-styled"><h6 class="mb-0">ONT Status Details</h6></div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 data-table">
+        <thead class="table-dark">
+          <tr><th>Name</th><th>Serial</th><th>OLT</th><th>Status</th><th>RX Power</th><th>IP</th><th>Uptime</th><th>Profile</th></tr>
+        </thead>
+        <tbody>
+          {% for ont in onts %}
+          <tr>
+            <td class="fw-medium"><a href="{% url 'ont_detail' ont.pk %}" class="text-decoration-none">{{ ont.name }}</a></td>
+            <td class="font-monospace" style="font-size:0.8rem;">{{ ont.serial_number }}</td>
+            <td style="font-size:0.82rem;">{{ ont.olt.name }}</td>
+            <td><span class="badge {{ ont.status_badge_class }}">{{ ont.get_status_display }}</span></td>
+            <td>{% if ont.status == 'online' %}<span class="badge {{ ont.signal_badge_class }}">{{ ont.rx_power }} dBm</span>{% else %}—{% endif %}</td>
+            <td class="font-monospace" style="font-size:0.8rem;">{{ ont.ip_address|default:"—" }}</td>
+            <td style="font-size:0.82rem;">{{ ont.uptime_formatted }}</td>
+            <td style="font-size:0.82rem;">{{ ont.profile.name|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% elif report_type == 'signal' %}
+<div class="card card-styled">
+  <div class="card-header-styled"><h6 class="mb-0">Signal Quality Report — Online ONTs</h6></div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 data-table">
+        <thead class="table-dark">
+          <tr><th>Name</th><th>OLT</th><th>RX Power</th><th>TX Power</th><th>OLT RX</th><th>Distance</th><th>Quality</th></tr>
+        </thead>
+        <tbody>
+          {% for ont in onts %}
+          <tr>
+            <td class="fw-medium"><a href="{% url 'ont_detail' ont.pk %}" class="text-decoration-none">{{ ont.name }}</a></td>
+            <td style="font-size:0.82rem;">{{ ont.olt.name }}</td>
+            <td><span class="badge {{ ont.signal_badge_class }}">{{ ont.rx_power }} dBm</span></td>
+            <td style="font-size:0.82rem;">{{ ont.tx_power }} dBm</td>
+            <td style="font-size:0.82rem;">{{ ont.olt_rx_power }} dBm</td>
+            <td style="font-size:0.82rem;">{{ ont.distance }} km</td>
+            <td><span class="badge {{ ont.signal_badge_class }}">{{ ont.signal_quality|capfirst }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% elif report_type == 'events' %}
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="stat-card stat-red"><div class="stat-icon"><i class="fa-solid fa-circle-xmark"></i></div><div class="stat-body"><div class="stat-value">{{ critical_count }}</div><div class="stat-label">Critical</div></div></div></div>
+  <div class="col-md-4"><div class="stat-card stat-orange"><div class="stat-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="stat-body"><div class="stat-value">{{ warning_count }}</div><div class="stat-label">Warnings</div></div></div></div>
+  <div class="col-md-4"><div class="stat-card stat-blue"><div class="stat-icon"><i class="fa-solid fa-circle-info"></i></div><div class="stat-body"><div class="stat-value">{{ info_count }}</div><div class="stat-label">Info</div></div></div></div>
+</div>
+<div class="card card-styled">
+  <div class="card-header-styled"><h6 class="mb-0">Event Details ({{ date_from }} — {{ date_to }})</h6></div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 data-table">
+        <thead class="table-dark"><tr><th>Time</th><th>Severity</th><th>Type</th><th>OLT</th><th>ONT</th><th>Message</th></tr></thead>
+        <tbody>
+          {% for event in events %}
+          <tr>
+            <td style="font-size:0.8rem; white-space:nowrap;">{{ event.timestamp|date:"Y-m-d H:i" }}</td>
+            <td><span class="badge {{ event.severity_badge_class }}">{{ event.get_severity_display }}</span></td>
+            <td style="font-size:0.82rem;">{{ event.get_type_display }}</td>
+            <td style="font-size:0.82rem;">{{ event.olt.name|default:"—" }}</td>
+            <td style="font-size:0.82rem;">{% if event.ont %}{{ event.ont.name|truncatechars:16 }}{% else %}—{% endif %}</td>
+            <td class="text-muted" style="font-size:0.8rem;">{{ event.message|truncatechars:60 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-4">No events in this period</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>$(document).ready(() => { if ($('.data-table').length) $('.data-table').DataTable({ pageLength: 25 }); });</script>
+{% endblock %}

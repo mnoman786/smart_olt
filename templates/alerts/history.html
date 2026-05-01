@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}Notification History{% endblock %}
+{% block breadcrumbs %}<li class="breadcrumb-item">Alerts</li><li class="breadcrumb-item active">History</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Notification History</h4>
+    <p class="page-subtitle">Record of all sent alert notifications</p>
+  </div>
+</div>
+<div class="card card-styled">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0 data-table">
+        <thead class="table-dark">
+          <tr><th>Rule</th><th>Channel</th><th>Recipient</th><th>Message</th><th>Sent At</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for n in notifications %}
+          <tr>
+            <td class="fw-medium" style="font-size:0.85rem;">{{ n.rule.name }}</td>
+            <td>
+              <span class="badge {% if n.channel == 'email' %}bg-primary{% else %}bg-success{% endif %}">
+                <i class="fa-solid {% if n.channel == 'email' %}fa-envelope{% else %}fa-mobile-screen{% endif %} me-1"></i>{{ n.get_channel_display }}
+              </span>
+            </td>
+            <td style="font-size:0.82rem;">{{ n.recipient }}</td>
+            <td class="text-muted" style="font-size:0.8rem;">{{ n.message|truncatechars:60 }}</td>
+            <td class="text-muted" style="font-size:0.8rem;">{{ n.sent_at|timesince }} ago</td>
+            <td>
+              {% if n.delivered %}
+              <span class="badge bg-success-subtle text-success"><i class="fa-solid fa-check me-1"></i>Delivered</span>
+              {% else %}
+              <span class="badge bg-danger-subtle text-danger"><i class="fa-solid fa-xmark me-1"></i>Failed</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-5">No notifications sent yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>$(document).ready(() => { if ($('.data-table').length) $('.data-table').DataTable({ pageLength: 25 }); });</script>
+{% endblock %}

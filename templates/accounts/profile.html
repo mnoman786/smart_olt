@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}My Profile{% endblock %}
+{% block breadcrumbs %}<li class="breadcrumb-item active">My Profile</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4 class="page-title"><i class="fa-solid fa-user-pen me-2 text-primary"></i>My Profile</h4>
+</div>
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card card-styled">
+      <div class="card-body">
+        <div class="text-center mb-4 p-3" style="background:#f8fafc; border-radius:12px;">
+          <div class="user-avatar-lg mb-3">{{ request.user.username|first|upper }}</div>
+          <h5 class="mb-1">{{ request.user.get_full_name|default:request.user.username }}</h5>
+          <span class="badge {{ request.user.profile.role_badge_class }}">{{ request.user.profile.get_role_display }}</span>
+          <div class="text-muted mt-1" style="font-size:0.85rem;">{{ request.user.email }}</div>
+        </div>
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label fw-medium">First Name</label>{{ user_form.first_name }}</div>
+            <div class="col-md-6"><label class="form-label fw-medium">Last Name</label>{{ user_form.last_name }}</div>
+            <div class="col-12"><label class="form-label fw-medium">Email</label>{{ user_form.email }}</div>
+            <div class="col-md-6"><label class="form-label fw-medium">Phone</label>{{ profile_form.phone }}</div>
+            <div class="col-md-6"><label class="form-label fw-medium">Organization</label>{{ profile_form.organization }}</div>
+            <div class="col-12 d-flex gap-2 mt-2">
+              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Save Changes</button>
+              <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

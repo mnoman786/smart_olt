@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Delete OLT{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'olt_list' %}">OLTs</a></li>
+<li class="breadcrumb-item active">Delete</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card card-styled border-danger">
+      <div class="card-body text-center py-5">
+        <div class="text-danger mb-3" style="font-size:3rem;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <h5 class="mb-2">Delete OLT</h5>
+        <p class="text-muted mb-4">
+          Are you sure you want to delete <strong>{{ olt.name }}</strong>?<br>
+          This will also delete all <strong>{{ olt.ont_count }} ONTs</strong> and all associated monitoring data.
+          <br><span class="text-danger fw-bold">This action cannot be undone.</span>
+        </p>
+        <form method="post" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger me-2"><i class="fa-solid fa-trash me-1"></i>Yes, Delete</button>
+        </form>
+        <a href="{% url 'olt_detail' olt.pk %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

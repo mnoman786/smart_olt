@@ -1,0 +1,234 @@
+{% extends 'base.html' %}
+{% block title %}{{ ont.name }}{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'ont_list' %}">ONTs</a></li>
+<li class="breadcrumb-item active">{{ ont.name }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title">
+      {{ ont.name }}
+      <span class="badge {{ ont.status_badge_class }} ms-2">{{ ont.get_status_display }}</span>
+    </h4>
+    <p class="page-subtitle">{{ ont.serial_number }} &nbsp;•&nbsp; {{ ont.technology }} / {{ ont.get_mode_display }} &nbsp;•&nbsp; <a href="{% url 'olt_detail' ont.olt.pk %}">{{ ont.olt.name }}</a></p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if request.user.profile.is_operator %}
+    <button class="btn btn-sm btn-outline-warning" onclick="rebootONT({{ ont.pk }})">
+      <i class="fa-solid fa-rotate me-1"></i>Reboot
+    </button>
+    <button class="btn btn-sm btn-outline-danger" onclick="factoryReset({{ ont.pk }})">
+      <i class="fa-solid fa-bomb me-1"></i>Factory Reset
+    </button>
+    <a href="{% url 'ont_edit' ont.pk %}" class="btn btn-sm btn-outline-primary">
+      <i class="fa-solid fa-pen me-1"></i>Edit
+    </a>
+    {% endif %}
+    {% if request.user.profile.is_admin %}
+    <a href="{% url 'ont_delete' ont.pk %}" class="btn btn-sm btn-outline-danger">
+      <i class="fa-solid fa-trash me-1"></i>Delete
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Action Result Alert -->
+<div id="actionAlert" class="alert d-none mb-3"></div>
+
+<!-- Info Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="info-card">
+      <div class="info-card-icon bg-{% if ont.status == 'online' %}success{% else %}danger{% endif %}-subtle text-{% if ont.status == 'online' %}success{% else %}danger{% endif %}">
+        <i class="fa-solid fa-{% if ont.status == 'online' %}circle-check{% else %}circle-xmark{% endif %}"></i>
+      </div>
+      <div class="info-card-value">{{ ont.get_status_display }}</div>
+      <div class="info-card-label">Status</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="info-card">
+      <div class="info-card-icon bg-primary-subtle text-primary"><i class="fa-solid fa-signal"></i></div>
+      <div class="info-card-value {% if ont.status == 'online' %}{{ ont.signal_badge_class|cut:'bg-'|cut:' text-dark' }}{% endif %}">
+        {% if ont.status == 'online' %}{{ ont.rx_power }} dBm{% else %}N/A{% endif %}
+      </div>
+      <div class="info-card-label">RX Power</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="info-card">
+      <div class="info-card-icon bg-info-subtle text-info"><i class="fa-solid fa-ruler-horizontal"></i></div>
+      <div class="info-card-value">{% if ont.distance %}{{ ont.distance }} km{% else %}N/A{% endif %}</div>
+      <div class="info-card-label">Distance</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="info-card">
+      <div class="info-card-icon bg-warning-subtle text-warning"><i class="fa-solid fa-clock"></i></div>
+      <div class="info-card-value">{{ ont.uptime_formatted }}</div>
+      <div class="info-card-label">Uptime</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Device Details -->
+  <div class="col-md-4">
+    <div class="card card-styled h-100">
+      <div class="card-header-styled"><h6 class="mb-0"><i class="fa-solid fa-circle-info me-2 text-primary"></i>ONT Details</h6></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem; width:40%;">OLT</th>
+            <td><a href="{% url 'olt_detail' ont.olt.pk %}" class="text-decoration-none">{{ ont.olt.name }}</a></td></tr>
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">PON Port</th>
+            <td>{% if ont.pon_port %}Board {{ ont.pon_port.board }} / Port {{ ont.pon_port.port }}{% else %}—{% endif %}</td></tr>
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">ONT ID</th><td>{{ ont.ont_id }}</td></tr>
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Technology</th><td><span class="badge bg-primary">{{ ont.technology }}</span></td></tr>
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Mode</th><td>{{ ont.get_mode_display }}</td></tr>
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">IP Address</th>
+            <td class="font-monospace">{{ ont.ip_address|default:"—" }}</td></tr>
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">MAC Address</th>
+            <td class="font-monospace" style="font-size:0.8rem;">{{ ont.mac_address|default:"—" }}</td></tr>
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">VLAN</th><td>{{ ont.vlan }}</td></tr>
+          {% if ont.profile %}
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Profile</th>
+            <td>{{ ont.profile.name }}<br><small class="text-muted">{{ ont.profile.download_speed }}/{{ ont.profile.upload_speed }} Mbps &nbsp;•&nbsp; {{ ont.profile.get_protocol_display }}</small></td></tr>
+          {% endif %}
+          {% if ont.address %}
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Address</th><td style="font-size:0.83rem;">{{ ont.address }}</td></tr>
+          {% endif %}
+          {% if ont.last_online %}
+          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Last Online</th>
+            <td style="font-size:0.82rem;">{{ ont.last_online|timesince }} ago</td></tr>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signal Chart -->
+  <div class="col-md-8">
+    <div class="card card-styled h-100">
+      <div class="card-header-styled d-flex justify-content-between">
+        <h6 class="mb-0"><i class="fa-solid fa-signal me-2 text-primary"></i>Signal History (24h)</h6>
+        <div class="d-flex gap-2 align-items-center" style="font-size:0.8rem;">
+          <span class="badge bg-primary-subtle text-primary">RX: {{ ont.rx_power }} dBm</span>
+          <span class="badge bg-success-subtle text-success">TX: {{ ont.tx_power }} dBm</span>
+          <span class="badge bg-warning-subtle text-warning">OLT RX: {{ ont.olt_rx_power }} dBm</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="position:relative; height:200px;">
+          <canvas id="signalChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Traffic Chart -->
+<div class="card card-styled mb-4">
+  <div class="card-header-styled">
+    <h6 class="mb-0"><i class="fa-solid fa-wave-square me-2 text-primary"></i>Traffic History (24h)</h6>
+  </div>
+  <div class="card-body">
+    <div style="position:relative; height:180px;">
+      <canvas id="trafficChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Events -->
+<div class="card card-styled">
+  <div class="card-header-styled"><h6 class="mb-0"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>ONT Event History</h6></div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-dark"><tr><th>Severity</th><th>Type</th><th>Message</th><th>Time</th><th></th></tr></thead>
+        <tbody>
+          {% for event in recent_events %}
+          <tr>
+            <td><span class="badge {{ event.severity_badge_class }}">{{ event.get_severity_display }}</span></td>
+            <td style="font-size:0.8rem;">{{ event.get_type_display }}</td>
+            <td class="text-muted" style="font-size:0.82rem;">{{ event.message|truncatechars:70 }}</td>
+            <td class="text-muted" style="font-size:0.8rem; white-space:nowrap;">{{ event.timestamp|timesince }} ago</td>
+            <td>{% if not event.acknowledged %}<span class="badge bg-danger-subtle text-danger" style="font-size:0.7rem;">Unack</span>{% endif %}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center text-muted py-3">No events recorded</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showAlert(msg, type) {
+  const el = document.getElementById('actionAlert');
+  el.className = `alert alert-${type} alert-dismissible fade show`;
+  el.innerHTML = `${msg} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+}
+function rebootONT(id) {
+  if (!confirm('Send reboot command to this ONT?')) return;
+  fetch(`/onts/${id}/reboot/`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' } })
+    .then(r => r.json()).then(d => showAlert(`<i class="fa-solid fa-rotate me-1"></i>${d.message}`, 'info'));
+}
+function factoryReset(id) {
+  if (!confirm('⚠️ Factory reset this ONT? This will erase all configuration!')) return;
+  fetch(`/onts/${id}/factory-reset/`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' } })
+    .then(r => r.json()).then(d => showAlert(`<i class="fa-solid fa-bomb me-1"></i>${d.message}`, 'warning'));
+}
+
+// Signal Chart
+fetch('/onts/{{ ont.pk }}/signal-data/')
+  .then(r => r.json()).then(data => {
+    new Chart(document.getElementById('signalChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [
+          { label: 'RX Power (dBm)', data: data.rx_power, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
+          { label: 'TX Power (dBm)', data: data.tx_power, borderColor: '#10b981', tension: 0.4, borderWidth: 1.5, pointRadius: 1 },
+          { label: 'OLT RX (dBm)', data: data.olt_rx_power, borderColor: '#f59e0b', tension: 0.4, borderWidth: 1.5, pointRadius: 1, borderDash: [4,4] },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } },
+        scales: {
+          y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 }, callback: v => v + ' dBm' } },
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 12 } }
+        }
+      }
+    });
+  });
+
+// Traffic Chart
+fetch('/onts/{{ ont.pk }}/traffic-data/')
+  .then(r => r.json()).then(data => {
+    new Chart(document.getElementById('trafficChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [
+          { label: 'Download (Mbps)', data: data.download, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 1 },
+          { label: 'Upload (Mbps)', data: data.upload, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 1 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 }, callback: v => v + ' Mbps' } },
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 12 } }
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}

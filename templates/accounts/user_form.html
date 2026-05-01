@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} User{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'users_list' %}">Users</a></li>
+<li class="breadcrumb-item active">{{ action }} User</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4 class="page-title"><i class="fa-solid fa-user-pen me-2 text-primary"></i>{{ action }} User</h4>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card card-styled">
+      <div class="card-header-styled">
+        <h6 class="mb-0 text-muted">
+          {% if action == 'Create' %}
+          <i class="fa-solid fa-user-plus me-2"></i>New Account Details
+          {% else %}
+          <i class="fa-solid fa-pen me-2"></i>Edit Account — {{ target_user.username }}
+          {% endif %}
+        </h6>
+      </div>
+      <div class="card-body p-4">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          {% if action == 'Create' %}
+          <!-- Account Credentials -->
+          <h6 class="text-uppercase text-muted fw-semibold mb-3" style="font-size:0.72rem; letter-spacing:1px;">Account Credentials</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-12">
+              <label class="form-label fw-medium">Username <span class="text-danger">*</span></label>
+              {{ user_form.username }}
+              {% if user_form.username.errors %}
+              <div class="invalid-feedback d-block">{{ user_form.username.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-medium">Password <span class="text-danger">*</span></label>
+              {{ user_form.password1 }}
+              {% if user_form.password1.errors %}
+              <div class="invalid-feedback d-block">{{ user_form.password1.errors.0 }}</div>
+              {% endif %}
+              <div class="form-text">Min 8 characters. Can't be too common.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-medium">Confirm Password <span class="text-danger">*</span></label>
+              {{ user_form.password2 }}
+              {% if user_form.password2.errors %}
+              <div class="invalid-feedback d-block">{{ user_form.password2.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+          <hr class="my-1 mb-3">
+          {% endif %}
+
+          <!-- Personal Info -->
+          <h6 class="text-uppercase text-muted fw-semibold mb-3" style="font-size:0.72rem; letter-spacing:1px;">Personal Information</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label fw-medium">First Name</label>
+              {{ user_form.first_name }}
+              {% if user_form.first_name.errors %}
+              <div class="invalid-feedback d-block">{{ user_form.first_name.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-medium">Last Name</label>
+              {{ user_form.last_name }}
+              {% if user_form.last_name.errors %}
+              <div class="invalid-feedback d-block">{{ user_form.last_name.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-medium">Email Address</label>
+              {{ user_form.email }}
+              {% if user_form.email.errors %}
+              <div class="invalid-feedback d-block">{{ user_form.email.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <hr class="my-1 mb-3">
+
+          <!-- Role & Contact -->
+          <h6 class="text-uppercase text-muted fw-semibold mb-3" style="font-size:0.72rem; letter-spacing:1px;">Role & Contact</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <label class="form-label fw-medium">Role <span class="text-danger">*</span></label>
+              {{ profile_form.role }}
+              <div class="form-text">Controls permissions.</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-medium">Phone Number</label>
+              {{ profile_form.phone }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-medium">Organization</label>
+              {{ profile_form.organization }}
+            </div>
+          </div>
+
+          <!-- Role description -->
+          <div class="alert alert-info py-2 px-3 mb-4" style="font-size:0.82rem;">
+            <i class="fa-solid fa-circle-info me-1"></i>
+            <strong>Admin</strong> — Full access &nbsp;|&nbsp;
+            <strong>Operator</strong> — Add/Edit OLTs and ONTs &nbsp;|&nbsp;
+            <strong>Viewer</strong> — Read-only access
+          </div>
+
+          <!-- Submit -->
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="fa-solid fa-floppy-disk me-1"></i>
+              {% if action == 'Create' %}Create User{% else %}Save Changes{% endif %}
+            </button>
+            <a href="{% url 'users_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }}{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'olt_list' %}">OLTs</a></li>
+{% if olt %}<li class="breadcrumb-item"><a href="{% url 'olt_detail' olt.pk %}">{{ olt.name }}</a></li>{% endif %}
+<li class="breadcrumb-item active">{{ action }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4 class="page-title"><i class="fa-solid fa-server me-2 text-primary"></i>{{ action }}</h4>
+</div>
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card card-styled">
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-medium">OLT Name <span class="text-danger">*</span></label>
+              {{ form.name }}
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-medium">Vendor <span class="text-danger">*</span></label>
+              {{ form.vendor }}
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-medium">Model <span class="text-danger">*</span></label>
+              {{ form.model }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-medium">IP Address <span class="text-danger">*</span></label>
+              {{ form.ip_address }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-medium">Telnet Port</label>
+              {{ form.telnet_port }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-medium">SSH Port</label>
+              {{ form.ssh_port }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-medium">Username</label>
+              {{ form.username }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-medium">Password</label>
+              {{ form.password }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-medium">SNMP Community</label>
+              {{ form.snmp_community }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-medium">Firmware Version</label>
+              {{ form.firmware_version }}
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-medium">Location</label>
+              {{ form.location }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-medium">Latitude</label>
+              {{ form.latitude }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-medium">Longitude</label>
+              {{ form.longitude }}
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-medium">Description</label>
+              {{ form.description }}
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                {{ form.is_active }}
+                <label class="form-check-label fw-medium">Active</label>
+              </div>
+            </div>
+            {% if form.errors %}
+            <div class="col-12">
+              <div class="alert alert-danger">
+                {% for field, errors in form.errors.items %}
+                {% for error in errors %}<div><i class="fa-solid fa-circle-xmark me-1"></i>{{ field }}: {{ error }}</div>{% endfor %}
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+            <div class="col-12 d-flex gap-2">
+              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Save OLT</button>
+              <a href="{% if olt %}{% url 'olt_detail' olt.pk %}{% else %}{% url 'olt_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

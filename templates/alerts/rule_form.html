@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }}{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'rules_list' %}">Alert Rules</a></li>
+<li class="breadcrumb-item active">{{ action }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header"><h4 class="page-title"><i class="fa-solid fa-bell me-2 text-primary"></i>{{ action }}</h4></div>
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card card-styled">
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label fw-medium">Rule Name <span class="text-danger">*</span></label>{{ form.name }}</div>
+            <div class="col-md-6"><label class="form-label fw-medium">Alert Type</label>{{ form.type }}</div>
+            <div class="col-md-3"><label class="form-label fw-medium">Operator</label>{{ form.operator }}</div>
+            <div class="col-md-3"><label class="form-label fw-medium">Threshold</label>{{ form.threshold }}</div>
+            <div class="col-12">
+              <div class="d-flex gap-4">
+                <div class="form-check">{{ form.enabled }}<label class="form-check-label">Enabled</label></div>
+                <div class="form-check">{{ form.notify_email }}<label class="form-check-label">Notify Email</label></div>
+                <div class="form-check">{{ form.notify_sms }}<label class="form-check-label">Notify SMS</label></div>
+              </div>
+            </div>
+            <div class="col-12"><label class="form-label fw-medium">Email Recipients</label>{{ form.email_recipients }}</div>
+            <div class="col-12"><label class="form-label fw-medium">SMS Recipients</label>{{ form.sms_recipients }}</div>
+            {% if form.errors %}
+            <div class="col-12"><div class="alert alert-danger">{% for f, errs in form.errors.items %}{% for e in errs %}<div>{{ f }}: {{ e }}</div>{% endfor %}{% endfor %}</div></div>
+            {% endif %}
+            <div class="col-12 d-flex gap-2">
+              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Save Rule</button>
+              <a href="{% url 'rules_list' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

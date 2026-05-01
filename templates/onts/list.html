@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block title %}ONTs{% endblock %}
+{% block breadcrumbs %}<li class="breadcrumb-item active">ONTs / ONUs</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-network-wired me-2 text-primary"></i>ONT / ONU Management</h4>
+    <p class="page-subtitle">Manage all provisioned ONTs across your network</p>
+  </div>
+  {% if request.user.profile.is_operator %}
+  <a href="{% url 'ont_create' %}" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>Add ONT</a>
+  {% endif %}
+</div>
+
+<!-- Filters -->
+<div class="card card-styled mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-3">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+          <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Name, serial, IP...">
+        </div>
+      </div>
+      <div class="col-auto">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Status</option>
+          {% for val, label in status_choices %}
+          <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="olt" class="form-select form-select-sm">
+          <option value="">All OLTs</option>
+          {% for olt in olts %}
+          <option value="{{ olt.pk }}" {% if olt_filter == olt.pk|stringformat:"s" %}selected{% endif %}>{{ olt.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="tech" class="form-select form-select-sm">
+          <option value="">All Tech</option>
+          <option value="GPON" {% if tech_filter == 'GPON' %}selected{% endif %}>GPON</option>
+          <option value="EPON" {% if tech_filter == 'EPON' %}selected{% endif %}>EPON</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+        <a href="{% url 'ont_list' %}" class="btn btn-sm btn-outline-secondary ms-1">Clear</a>
+      </div>
+      <div class="col-auto ms-auto">
+        <span class="badge bg-secondary">{{ onts|length }} ONTs</span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ONT Table -->
+<div class="card card-styled">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0 data-table">
+        <thead class="table-dark">
+          <tr>
+            <th>Name</th>
+            <th>Serial Number</th>
+            <th>OLT</th>
+            <th>PON Port</th>
+            <th>Status</th>
+            <th>RX Power</th>
+            <th>TX Power</th>
+            <th>Distance</th>
+            <th>IP Address</th>
+            <th>Uptime</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ont in onts %}
+          <tr>
+            <td>
+              <a href="{% url 'ont_detail' ont.pk %}" class="text-decoration-none fw-medium">{{ ont.name }}</a>
+              {% if ont.profile %}<small class="d-block text-muted" style="font-size:0.72rem;">{{ ont.profile.name }}</small>{% endif %}
+            </td>
+            <td class="font-monospace" style="font-size:0.8rem;">{{ ont.serial_number }}</td>
+            <td>
+              <a href="{% url 'olt_detail' ont.olt.pk %}" class="text-decoration-none">
+                <span class="badge {{ ont.olt.vendor_badge_class }}" style="font-size:0.7rem;">{{ ont.olt.vendor }}</span>
+                <span style="font-size:0.82rem;">{{ ont.olt.name }}</span>
+              </a>
+            </td>
+            <td class="text-muted" style="font-size:0.8rem;">{% if ont.pon_port %}B{{ ont.pon_port.board }}/P{{ ont.pon_port.port }}{% else %}—{% endif %}</td>
+            <td><span class="badge {{ ont.status_badge_class }}">{{ ont.get_status_display }}</span></td>
+            <td>
+              {% if ont.status == 'online' %}
+              <span class="badge {{ ont.signal_badge_class }}" title="{{ ont.signal_quality }}">{{ ont.rx_power }} dBm</span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% if ont.status == 'online' %}<span class="text-muted" style="font-size:0.82rem;">{{ ont.tx_power }} dBm</span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="text-muted" style="font-size:0.82rem;">{% if ont.distance %}{{ ont.distance }} km{% else %}—{% endif %}</td>
+            <td class="font-monospace" style="font-size:0.8rem;">{{ ont.ip_address|default:"—" }}</td>
+            <td class="text-muted" style="font-size:0.8rem;">{{ ont.uptime_formatted }}</td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{% url 'ont_detail' ont.pk %}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;">View</a>
+                {% if request.user.profile.is_operator %}
+                <a href="{% url 'ont_edit' ont.pk %}" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:0.75rem;"><i class="fa-solid fa-pen"></i></a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="11" class="text-center text-muted py-5">
+            <i class="fa-solid fa-network-wired fa-2x mb-2 d-block"></i>
+            No ONTs found. {% if request.user.profile.is_operator %}<a href="{% url 'ont_create' %}">Add your first ONT</a>{% endif %}
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(() => {
+  if ($('.data-table').length) {
+    $('.data-table').DataTable({ pageLength: 25, order: [] });
+  }
+});
+</script>
+{% endblock %}

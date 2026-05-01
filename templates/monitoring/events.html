@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}Event Log{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item">Monitoring</li>
+<li class="breadcrumb-item active">Events</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-triangle-exclamation me-2 text-warning"></i>Event Log</h4>
+    <p class="page-subtitle">Network events, alarms, and status changes</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card card-styled mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-3">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+          <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Search message...">
+        </div>
+      </div>
+      <div class="col-auto">
+        <select name="severity" class="form-select form-select-sm">
+          <option value="">All Severity</option>
+          <option value="critical" {% if severity_filter == 'critical' %}selected{% endif %}>Critical</option>
+          <option value="warning" {% if severity_filter == 'warning' %}selected{% endif %}>Warning</option>
+          <option value="info" {% if severity_filter == 'info' %}selected{% endif %}>Info</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="type" class="form-select form-select-sm">
+          <option value="">All Types</option>
+          {% for val, label in type_choices %}
+          <option value="{{ val }}" {% if type_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="olt" class="form-select form-select-sm">
+          <option value="">All OLTs</option>
+          {% for olt in olts %}
+          <option value="{{ olt.pk }}" {% if olt_filter == olt.pk|stringformat:"s" %}selected{% endif %}>{{ olt.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="ack" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="no" {% if ack_filter == 'no' %}selected{% endif %}>Unacknowledged</option>
+          <option value="yes" {% if ack_filter == 'yes' %}selected{% endif %}>Acknowledged</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+        <a href="{% url 'monitoring_events' %}" class="btn btn-sm btn-outline-secondary ms-1">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Events Table -->
+<div class="card card-styled">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0 data-table">
+        <thead class="table-dark">
+          <tr><th>Severity</th><th>Type</th><th>OLT</th><th>ONT</th><th>Message</th><th>Time</th><th>Ack</th></tr>
+        </thead>
+        <tbody>
+          {% for event in events %}
+          <tr id="event-{{ event.pk }}" class="{% if not event.acknowledged and event.severity == 'critical' %}table-danger{% elif not event.acknowledged and event.severity == 'warning' %}table-warning{% endif %}">
+            <td>
+              <span class="badge {{ event.severity_badge_class }}">
+                <i class="fa-solid {{ event.severity_icon }} me-1"></i>{{ event.get_severity_display }}
+              </span>
+            </td>
+            <td style="font-size:0.82rem;">{{ event.get_type_display }}</td>
+            <td>{% if event.olt %}<a href="{% url 'olt_detail' event.olt.pk %}" class="text-decoration-none" style="font-size:0.82rem;">{{ event.olt.name }}</a>{% else %}—{% endif %}</td>
+            <td>{% if event.ont %}<a href="{% url 'ont_detail' event.ont.pk %}" class="text-decoration-none" style="font-size:0.82rem;">{{ event.ont.name|truncatechars:16 }}</a>{% else %}—{% endif %}</td>
+            <td class="text-muted" style="font-size:0.82rem;">{{ event.message|truncatechars:80 }}</td>
+            <td class="text-muted" style="font-size:0.8rem; white-space:nowrap;">{{ event.timestamp|timesince }} ago</td>
+            <td>
+              {% if event.acknowledged %}
+              <span class="badge bg-success-subtle text-success" style="font-size:0.7rem;">Ack</span>
+              {% else %}
+              <button class="btn btn-xs py-0 px-2 btn-outline-secondary" style="font-size:0.72rem;" onclick="ackEvent({{ event.pk }})">Ack</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-5">
+            <i class="fa-solid fa-triangle-exclamation fa-2x mb-2 d-block"></i>No events found
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function ackEvent(id) {
+  fetch(`/monitoring/events/${id}/acknowledge/`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' } })
+    .then(r => r.json()).then(() => {
+      const row = document.getElementById(`event-${id}`);
+      row.classList.remove('table-danger', 'table-warning');
+      row.querySelector('button').outerHTML = '<span class="badge bg-success-subtle text-success" style="font-size:0.7rem;">Ack</span>';
+    });
+}
+$(document).ready(() => { if ($('.data-table').length) $('.data-table').DataTable({ pageLength: 50, order: [] }); });
+</script>
+{% endblock %}

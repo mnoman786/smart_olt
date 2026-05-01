@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Alert Rules{% endblock %}
+{% block breadcrumbs %}<li class="breadcrumb-item">Alerts</li><li class="breadcrumb-item active">Rules</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-bell me-2 text-primary"></i>Alert Rules</h4>
+    <p class="page-subtitle">Configure automated alert rules and notification thresholds</p>
+  </div>
+  {% if request.user.profile.is_operator %}
+  <a href="{% url 'rule_create' %}" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>Add Rule</a>
+  {% endif %}
+</div>
+
+<div class="row g-3">
+  {% for rule in rules %}
+  <div class="col-md-6">
+    <div class="card card-styled h-100 {% if not rule.enabled %}opacity-75{% endif %}">
+      <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between mb-2">
+          <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <i class="fa-solid {{ rule.type_icon }} text-primary"></i>
+              <h6 class="mb-0 fw-bold">{{ rule.name }}</h6>
+            </div>
+            <span class="badge bg-secondary-subtle text-secondary">{{ rule.get_type_display }}</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            {% if rule.enabled %}
+            <span class="badge bg-success"><i class="fa-solid fa-circle me-1" style="font-size:0.55rem;"></i>Active</span>
+            {% else %}
+            <span class="badge bg-secondary">Disabled</span>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if rule.threshold %}
+        <div class="mb-2 text-muted" style="font-size:0.85rem;">
+          <i class="fa-solid fa-sliders me-1"></i>Threshold: <strong>{{ rule.operator|upper }} {{ rule.threshold }}</strong>
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-3 mb-3" style="font-size:0.82rem;">
+          {% if rule.notify_email %}
+          <span class="text-primary"><i class="fa-solid fa-envelope me-1"></i>Email</span>
+          {% endif %}
+          {% if rule.notify_sms %}
+          <span class="text-success"><i class="fa-solid fa-mobile-screen me-1"></i>SMS</span>
+          {% endif %}
+        </div>
+
+        {% if rule.email_recipients %}
+        <div class="mb-2" style="font-size:0.78rem; color:#64748b;">
+          <i class="fa-solid fa-at me-1"></i>{{ rule.email_recipients|truncatechars:50 }}
+        </div>
+        {% endif %}
+
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <small class="text-muted">{{ rule.notifications.count }} notifications sent</small>
+          {% if request.user.profile.is_operator %}
+          <div class="d-flex gap-2">
+            <a href="{% url 'rule_edit' rule.pk %}" class="btn btn-sm btn-outline-primary py-0 px-3">Edit</a>
+            {% if request.user.profile.is_admin %}
+            <a href="{% url 'rule_delete' rule.pk %}" class="btn btn-sm btn-outline-danger py-0 px-3">Delete</a>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12">
+    <div class="empty-state">
+      <i class="fa-solid fa-bell-slash"></i>
+      <h5>No Alert Rules</h5>
+      <p class="text-muted">Create alert rules to get notified of network events.</p>
+      {% if request.user.profile.is_operator %}
+      <a href="{% url 'rule_create' %}" class="btn btn-primary mt-2"><i class="fa-solid fa-plus me-1"></i>Create First Rule</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

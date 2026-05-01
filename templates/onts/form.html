@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }}{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'ont_list' %}">ONTs</a></li>
+{% if ont %}<li class="breadcrumb-item"><a href="{% url 'ont_detail' ont.pk %}">{{ ont.name }}</a></li>{% endif %}
+<li class="breadcrumb-item active">{{ action }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4 class="page-title"><i class="fa-solid fa-network-wired me-2 text-primary"></i>{{ action }}</h4>
+</div>
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card card-styled">
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-12"><h6 class="text-muted border-bottom pb-2">OLT Assignment</h6></div>
+            <div class="col-md-6"><label class="form-label fw-medium">OLT <span class="text-danger">*</span></label>{{ form.olt }}</div>
+            <div class="col-md-4"><label class="form-label fw-medium">PON Port</label>{{ form.pon_port }}</div>
+            <div class="col-md-2"><label class="form-label fw-medium">ONT ID</label>{{ form.ont_id }}</div>
+
+            <div class="col-12"><h6 class="text-muted border-bottom pb-2 mt-2">ONT Identity</h6></div>
+            <div class="col-md-6"><label class="form-label fw-medium">Customer Name <span class="text-danger">*</span></label>{{ form.name }}</div>
+            <div class="col-md-6"><label class="form-label fw-medium">Serial Number <span class="text-danger">*</span></label>{{ form.serial_number }}</div>
+            <div class="col-12"><label class="form-label fw-medium">Description</label>{{ form.description }}</div>
+
+            <div class="col-12"><h6 class="text-muted border-bottom pb-2 mt-2">Network Configuration</h6></div>
+            <div class="col-md-3"><label class="form-label fw-medium">Technology</label>{{ form.technology }}</div>
+            <div class="col-md-3"><label class="form-label fw-medium">Mode</label>{{ form.mode }}</div>
+            <div class="col-md-3"><label class="form-label fw-medium">VLAN</label>{{ form.vlan }}</div>
+            <div class="col-md-3"><label class="form-label fw-medium">Speed Profile</label>{{ form.profile }}</div>
+            <div class="col-md-6"><label class="form-label fw-medium">IP Address</label>{{ form.ip_address }}</div>
+            <div class="col-md-6"><label class="form-label fw-medium">MAC Address</label>{{ form.mac_address }}</div>
+
+            <div class="col-12"><h6 class="text-muted border-bottom pb-2 mt-2">Location</h6></div>
+            <div class="col-12"><label class="form-label fw-medium">Address</label>{{ form.address }}</div>
+            <div class="col-md-6"><label class="form-label fw-medium">Latitude</label>{{ form.latitude }}</div>
+            <div class="col-md-6"><label class="form-label fw-medium">Longitude</label>{{ form.longitude }}</div>
+
+            {% if form.errors %}
+            <div class="col-12">
+              <div class="alert alert-danger">
+                {% for field, errors in form.errors.items %}{% for error in errors %}
+                <div><i class="fa-solid fa-circle-xmark me-1"></i>{{ field }}: {{ error }}</div>
+                {% endfor %}{% endfor %}
+              </div>
+            </div>
+            {% endif %}
+            <div class="col-12 d-flex gap-2">
+              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Save ONT</button>
+              <a href="{% if ont %}{% url 'ont_detail' ont.pk %}{% else %}{% url 'ont_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

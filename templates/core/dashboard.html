@@ -1,0 +1,243 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block breadcrumbs %}<li class="breadcrumb-item active">Dashboard</li>{% endblock %}
+
+{% block content %}
+<!-- Stats Cards Row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3">
+    <div class="stat-card stat-blue">
+      <div class="stat-icon"><i class="fa-solid fa-server"></i></div>
+      <div class="stat-body">
+        <div class="stat-value">{{ total_olts }}</div>
+        <div class="stat-label">Total OLTs</div>
+        <div class="stat-sub"><span class="text-success">{{ online_olts }} online</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card stat-green">
+      <div class="stat-icon"><i class="fa-solid fa-network-wired"></i></div>
+      <div class="stat-body">
+        <div class="stat-value">{{ total_onts }}</div>
+        <div class="stat-label">Total ONTs</div>
+        <div class="stat-sub"><span class="text-success">{{ online_onts }} online</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card stat-red">
+      <div class="stat-icon"><i class="fa-solid fa-plug-circle-xmark"></i></div>
+      <div class="stat-body">
+        <div class="stat-value">{{ offline_onts }}</div>
+        <div class="stat-label">Offline ONTs</div>
+        <div class="stat-sub"><span class="text-danger">{{ fault_onts }} fault</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card stat-orange">
+      <div class="stat-icon"><i class="fa-solid fa-bell"></i></div>
+      <div class="stat-body">
+        <div class="stat-value">{{ critical_events }}</div>
+        <div class="stat-label">Critical Alerts</div>
+        <div class="stat-sub"><span class="text-warning">Unacknowledged</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-3 mb-4">
+  <!-- ONT Status Donut -->
+  <div class="col-md-4">
+    <div class="card card-styled h-100">
+      <div class="card-header-styled">
+        <h6 class="mb-0"><i class="fa-solid fa-chart-pie me-2 text-primary"></i>ONT Status Overview</h6>
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center py-3">
+        <div style="position:relative; width:220px; height:220px;">
+          <canvas id="ontStatusChart"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+            <div style="font-size:1.8rem;font-weight:700;color:#1e293b;">{{ total_onts }}</div>
+            <div style="font-size:0.75rem;color:#64748b;">Total ONTs</div>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <div class="d-flex justify-content-around text-center" style="font-size:0.8rem;">
+          <div><span class="badge bg-success me-1">{{ online_onts }}</span>Online</div>
+          <div><span class="badge bg-danger me-1">{{ offline_onts }}</span>Offline</div>
+          <div><span class="badge bg-warning text-dark me-1">{{ fault_onts }}</span>Fault</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Traffic Chart -->
+  <div class="col-md-8">
+    <div class="card card-styled h-100">
+      <div class="card-header-styled d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="fa-solid fa-wave-square me-2 text-primary"></i>Network Traffic (24h)</h6>
+        <span class="badge bg-primary-subtle text-primary">Live</span>
+      </div>
+      <div class="card-body">
+        <div style="position:relative; height:220px;">
+          <canvas id="trafficChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Table Row -->
+<div class="row g-3">
+  <!-- Recent Events -->
+  <div class="col-lg-7">
+    <div class="card card-styled">
+      <div class="card-header-styled d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="fa-solid fa-triangle-exclamation me-2 text-warning"></i>Recent Events</h6>
+        <a href="{% url 'monitoring_events' %}" class="btn btn-sm btn-outline-primary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 table-sm">
+            <thead class="table-dark">
+              <tr>
+                <th>Severity</th>
+                <th>ONT / OLT</th>
+                <th>Message</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for event in recent_events %}
+              <tr>
+                <td>
+                  <span class="badge {{ event.severity_badge_class }}">
+                    <i class="fa-solid {{ event.severity_icon }} me-1"></i>{{ event.get_severity_display }}
+                  </span>
+                </td>
+                <td>
+                  {% if event.ont %}<a href="{% url 'ont_detail' event.ont.pk %}" class="text-decoration-none fw-medium">{{ event.ont.name|truncatechars:18 }}</a>
+                  {% elif event.olt %}<a href="{% url 'olt_detail' event.olt.pk %}" class="text-decoration-none fw-medium">{{ event.olt.name }}</a>
+                  {% else %}—{% endif %}
+                </td>
+                <td class="text-muted" style="font-size:0.82rem;">{{ event.message|truncatechars:50 }}</td>
+                <td class="text-muted" style="font-size:0.8rem; white-space:nowrap;">{{ event.timestamp|timesince }} ago</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted py-4">No recent events</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div class="col-lg-5">
+    <!-- Poor Signal ONTs -->
+    <div class="card card-styled mb-3">
+      <div class="card-header-styled d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="fa-solid fa-signal me-2 text-danger"></i>Poor Signal ONTs</h6>
+        <a href="{% url 'monitoring_signals' %}?quality=poor" class="btn btn-sm btn-outline-danger">View All</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-dark">
+              <tr><th>ONT</th><th>OLT</th><th>RX (dBm)</th></tr>
+            </thead>
+            <tbody>
+              {% for ont in poor_signal_onts %}
+              <tr>
+                <td><a href="{% url 'ont_detail' ont.pk %}" class="text-decoration-none fw-medium">{{ ont.name|truncatechars:16 }}</a></td>
+                <td class="text-muted" style="font-size:0.8rem;">{{ ont.olt.name|truncatechars:14 }}</td>
+                <td><span class="badge bg-danger">{{ ont.rx_power }} dBm</span></td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-center text-muted py-3">All signals are good</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top OLTs -->
+    <div class="card card-styled">
+      <div class="card-header-styled">
+        <h6 class="mb-0"><i class="fa-solid fa-trophy me-2 text-warning"></i>OLTs by ONT Count</h6>
+      </div>
+      <div class="card-body p-0">
+        {% for olt in top_olts %}
+        <div class="d-flex align-items-center px-3 py-2 border-bottom">
+          <span class="badge {{ olt.vendor_badge_class }} me-2" style="font-size:0.7rem;">{{ olt.vendor }}</span>
+          <a href="{% url 'olt_detail' olt.pk %}" class="text-decoration-none fw-medium flex-grow-1" style="font-size:0.88rem;">{{ olt.name }}</a>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge {{ olt.status_badge_class }}">{{ olt.get_status_display }}</span>
+            <span class="badge bg-secondary">{{ olt.total }} ONTs</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ONT Status Donut Chart — fixed size container so hover never resizes
+const statusCtx = document.getElementById('ontStatusChart').getContext('2d');
+new Chart(statusCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Online', 'Offline', 'Fault', 'Other'],
+    datasets: [{
+      data: [{{ ont_status_data.online }}, {{ ont_status_data.offline }}, {{ ont_status_data.fault }}, {{ ont_status_data.other }}],
+      backgroundColor: ['#10b981', '#ef4444', '#f59e0b', '#94a3b8'],
+      borderWidth: 0,
+      hoverOffset: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '70%',
+    plugins: { legend: { display: false }, tooltip: { callbacks: {
+      label: ctx => ` ${ctx.label}: ${ctx.parsed} ONTs`
+    }}},
+    animation: { animateRotate: true, duration: 800 }
+  }
+});
+
+// Traffic Chart
+fetch('/monitoring/api/traffic-chart/')
+  .then(r => r.json())
+  .then(data => {
+    const ctx = document.getElementById('trafficChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [
+          { label: 'Download (Mbps)', data: data.download, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
+          { label: 'Upload (Mbps)', data: data.upload, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 } } },
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 12 } }
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}

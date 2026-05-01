@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}User Management{% endblock %}
+{% block breadcrumbs %}<li class="breadcrumb-item active">Users</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-users me-2 text-primary"></i>User Management</h4>
+    <p class="page-subtitle">Manage operator and viewer accounts</p>
+  </div>
+  <a href="{% url 'user_create' %}" class="btn btn-primary"><i class="fa-solid fa-user-plus me-1"></i>Add User</a>
+</div>
+
+<!-- Search -->
+<div class="card card-styled mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+          <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Search username, email...">
+        </div>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Search</button>
+        <a href="{% url 'users_list' %}" class="btn btn-sm btn-outline-secondary ms-1">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card card-styled">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 data-table">
+        <thead class="table-dark">
+          <tr><th>User</th><th>Email</th><th>Role</th><th>Organization</th><th>Joined</th><th>Last Login</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div class="user-avatar-sm">{{ user.username|first|upper }}</div>
+                <div>
+                  <div class="fw-medium">{{ user.get_full_name|default:user.username }}</div>
+                  <small class="text-muted">@{{ user.username }}</small>
+                </div>
+              </div>
+            </td>
+            <td class="text-muted" style="font-size:0.85rem;">{{ user.email|default:"—" }}</td>
+            <td><span class="badge {{ user.profile.role_badge_class }}">{{ user.profile.get_role_display }}</span></td>
+            <td class="text-muted" style="font-size:0.85rem;">{{ user.profile.organization|default:"—" }}</td>
+            <td class="text-muted" style="font-size:0.82rem;">{{ user.date_joined|date:"Y-m-d" }}</td>
+            <td class="text-muted" style="font-size:0.82rem;">{% if user.last_login %}{{ user.last_login|timesince }} ago{% else %}Never{% endif %}</td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{% url 'user_edit' user.pk %}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="fa-solid fa-pen"></i> Edit</a>
+                {% if user != request.user %}
+                <a href="{% url 'user_delete' user.pk %}" class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size:0.75rem;"><i class="fa-solid fa-trash"></i></a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>$(document).ready(() => { if ($('.data-table').length) $('.data-table').DataTable({ pageLength: 25, order: [] }); });</script>
+{% endblock %}

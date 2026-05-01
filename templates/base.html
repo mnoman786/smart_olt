@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}SmartOLT Cloud{% endblock %} — SmartOLT Cloud</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/main.css' %}">
+</head>
+<body>
+
+{% if user.is_authenticated %}
+<!-- Sidebar -->
+<nav id="sidebar" class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <i class="fa-solid fa-bolt-lightning text-warning"></i>
+      <span class="logo-text">SmartOLT</span>
+    </div>
+    <button class="sidebar-toggle btn btn-link" id="sidebarToggle">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+  </div>
+
+  <div class="sidebar-nav">
+    <!-- Dashboard -->
+    <a href="{% url 'dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+      <i class="fa-solid fa-gauge-high nav-icon"></i>
+      <span class="nav-label">Dashboard</span>
+    </a>
+
+    <!-- OLTs -->
+    <div class="nav-group">
+      <div class="nav-group-header {% if 'olt' in request.resolver_match.url_name %}active{% endif %}" data-group="olts">
+        <i class="fa-solid fa-server nav-icon"></i>
+        <span class="nav-label">OLTs</span>
+        <i class="fa-solid fa-chevron-down nav-arrow"></i>
+      </div>
+      <div class="nav-group-items {% if 'olt' in request.resolver_match.url_name %}show{% endif %}" id="group-olts">
+        <a href="{% url 'olt_list' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'olt_list' %}active{% endif %}">
+          <i class="fa-solid fa-list"></i> All OLTs
+        </a>
+        <a href="{% url 'olt_create' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'olt_create' %}active{% endif %}">
+          <i class="fa-solid fa-plus"></i> Add OLT
+        </a>
+      </div>
+    </div>
+
+    <!-- ONTs -->
+    <div class="nav-group">
+      <div class="nav-group-header {% if 'ont' in request.resolver_match.url_name %}active{% endif %}" data-group="onts">
+        <i class="fa-solid fa-network-wired nav-icon"></i>
+        <span class="nav-label">ONTs / ONUs</span>
+        <i class="fa-solid fa-chevron-down nav-arrow"></i>
+      </div>
+      <div class="nav-group-items {% if 'ont' in request.resolver_match.url_name %}show{% endif %}" id="group-onts">
+        <a href="{% url 'ont_list' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'ont_list' %}active{% endif %}">
+          <i class="fa-solid fa-list"></i> All ONTs
+        </a>
+        <a href="{% url 'ont_create' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'ont_create' %}active{% endif %}">
+          <i class="fa-solid fa-plus"></i> Add ONT
+        </a>
+        <a href="{% url 'ont_profiles' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'ont_profiles' %}active{% endif %}">
+          <i class="fa-solid fa-sliders"></i> Profiles
+        </a>
+      </div>
+    </div>
+
+    <!-- Monitoring -->
+    <div class="nav-group">
+      <div class="nav-group-header {% if 'monitoring' in request.resolver_match.url_name %}active{% endif %}" data-group="monitoring">
+        <i class="fa-solid fa-chart-line nav-icon"></i>
+        <span class="nav-label">Monitoring</span>
+        <i class="fa-solid fa-chevron-down nav-arrow"></i>
+      </div>
+      <div class="nav-group-items {% if 'monitoring' in request.resolver_match.url_name %}show{% endif %}" id="group-monitoring">
+        <a href="{% url 'monitoring_signals' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'monitoring_signals' %}active{% endif %}">
+          <i class="fa-solid fa-signal"></i> Signal Levels
+        </a>
+        <a href="{% url 'monitoring_traffic' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'monitoring_traffic' %}active{% endif %}">
+          <i class="fa-solid fa-wave-square"></i> Traffic
+        </a>
+        <a href="{% url 'monitoring_events' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'monitoring_events' %}active{% endif %}">
+          <i class="fa-solid fa-triangle-exclamation"></i> Events
+        </a>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="nav-group">
+      <div class="nav-group-header {% if 'alert' in request.resolver_match.url_name or 'rule' in request.resolver_match.url_name %}active{% endif %}" data-group="alerts">
+        <i class="fa-solid fa-bell nav-icon"></i>
+        <span class="nav-label">Alerts</span>
+        <i class="fa-solid fa-chevron-down nav-arrow"></i>
+      </div>
+      <div class="nav-group-items {% if 'alert' in request.resolver_match.url_name or 'rule' in request.resolver_match.url_name %}show{% endif %}" id="group-alerts">
+        <a href="{% url 'rules_list' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'rules_list' %}active{% endif %}">
+          <i class="fa-solid fa-sliders"></i> Alert Rules
+        </a>
+        <a href="{% url 'alert_history' %}" class="nav-sub-item {% if request.resolver_match.url_name == 'alert_history' %}active{% endif %}">
+          <i class="fa-solid fa-clock-rotate-left"></i> History
+        </a>
+      </div>
+    </div>
+
+    <!-- Reports -->
+    <a href="{% url 'reports' %}" class="nav-item {% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
+      <i class="fa-solid fa-file-chart-column nav-icon"></i>
+      <span class="nav-label">Reports</span>
+    </a>
+
+    <!-- Users (admin only) -->
+    {% if user.profile.is_admin %}
+    <a href="{% url 'users_list' %}" class="nav-item {% if request.resolver_match.url_name == 'users_list' %}active{% endif %}">
+      <i class="fa-solid fa-users nav-icon"></i>
+      <span class="nav-label">Users</span>
+    </a>
+    {% endif %}
+
+    <div class="nav-divider"></div>
+
+    <!-- API Docs -->
+    <a href="/admin/" class="nav-item" target="_blank">
+      <i class="fa-solid fa-lock nav-icon"></i>
+      <span class="nav-label">Admin Panel</span>
+    </a>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <div class="user-avatar">{{ user.username|first|upper }}</div>
+      <div class="user-details">
+        <div class="user-name">{{ user.get_full_name|default:user.username }}</div>
+        <div class="user-role">
+          <span class="badge {{ user.profile.role_badge_class }}">{{ user.profile.get_role_display }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<div id="mainContent" class="main-content">
+  <!-- Top Navbar -->
+  <nav class="top-navbar">
+    <div class="navbar-left">
+      <button class="btn btn-sm btn-outline-secondary me-3" id="sidebarToggleBtn">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+          {% block breadcrumbs %}{% endblock %}
+        </ol>
+      </nav>
+    </div>
+    <div class="navbar-right">
+      <!-- Live time -->
+      <div class="live-time me-3 d-none d-md-flex">
+        <i class="fa-regular fa-clock me-1"></i>
+        <span id="liveTime"></span>
+      </div>
+
+      <!-- Alert bell -->
+      <a href="{% url 'monitoring_events' %}" class="btn btn-sm btn-outline-secondary position-relative me-2">
+        <i class="fa-solid fa-bell"></i>
+        {% if critical_events_count %}
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.65rem;">
+          {{ critical_events_count }}
+        </span>
+        {% endif %}
+      </a>
+
+      <!-- User dropdown -->
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+          <span class="user-avatar-sm">{{ user.username|first|upper }}</span>
+          {{ user.get_full_name|default:user.username }}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item" href="{% url 'profile' %}"><i class="fa-solid fa-user-pen me-2"></i>My Profile</a></li>
+          {% if user.profile.is_admin %}
+          <li><a class="dropdown-item" href="{% url 'users_list' %}"><i class="fa-solid fa-users me-2"></i>Manage Users</a></li>
+          {% endif %}
+          <li><hr class="dropdown-divider"></li>
+          <li>
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}
+              <button type="submit" class="dropdown-item text-danger">
+                <i class="fa-solid fa-right-from-bracket me-2"></i>Logout
+              </button>
+            </form>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Flash Messages -->
+  {% if messages %}
+  <div class="messages-container">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
+      <i class="fa-solid {% if message.tags == 'success' %}fa-circle-check{% elif message.tags == 'error' or message.tags == 'danger' %}fa-circle-xmark{% elif message.tags == 'warning' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %} me-2"></i>
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Page Content -->
+  <div class="page-content">
+    {% block content %}{% endblock %}
+  </div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <span>&copy; 2024 SmartOLT Cloud — ZTE &amp; Huawei OLT Management Platform</span>
+    <span class="ms-3 text-muted">v1.0.0</span>
+  </footer>
+</div>
+
+{% else %}
+  {% block auth_content %}{% endblock %}
+{% endif %}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+{% load static %}
+<script src="{% static 'js/main.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

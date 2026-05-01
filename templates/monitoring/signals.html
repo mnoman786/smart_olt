@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block title %}Signal Monitoring{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item">Monitoring</li>
+<li class="breadcrumb-item active">Signal Levels</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-signal me-2 text-primary"></i>Signal Level Monitoring</h4>
+    <p class="page-subtitle">Real-time optical signal analysis for all online ONTs</p>
+  </div>
+</div>
+
+<!-- Signal Threshold Guide -->
+<div class="row g-2 mb-3">
+  <div class="col-auto"><span class="badge bg-success px-3 py-2"><i class="fa-solid fa-signal me-1"></i>Excellent &gt; -20 dBm</span></div>
+  <div class="col-auto"><span class="badge bg-success px-3 py-2">Good: -20 to -23 dBm</span></div>
+  <div class="col-auto"><span class="badge bg-warning text-dark px-3 py-2">Fair: -23 to -27 dBm</span></div>
+  <div class="col-auto"><span class="badge bg-danger px-3 py-2">Poor &lt; -27 dBm</span></div>
+</div>
+
+<!-- Filters -->
+<div class="card card-styled mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+          <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Search ONT name or serial...">
+        </div>
+      </div>
+      <div class="col-auto">
+        <select name="quality" class="form-select form-select-sm">
+          <option value="">All Quality</option>
+          <option value="good" {% if quality_filter == 'good' %}selected{% endif %}>Good (&gt;= -23 dBm)</option>
+          <option value="fair" {% if quality_filter == 'fair' %}selected{% endif %}>Fair (-23 to -27)</option>
+          <option value="poor" {% if quality_filter == 'poor' %}selected{% endif %}>Poor (&lt; -27 dBm)</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+        <a href="{% url 'monitoring_signals' %}" class="btn btn-sm btn-outline-secondary ms-1">Clear</a>
+      </div>
+      <div class="col-auto ms-auto">
+        <span class="badge bg-secondary">{{ onts|length }} ONTs online</span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Signal Chart Overview -->
+<div class="card card-styled mb-3">
+  <div class="card-header-styled"><h6 class="mb-0"><i class="fa-solid fa-chart-bar me-2 text-primary"></i>Signal Overview — Top 20 ONTs by RX Power</h6></div>
+  <div class="card-body">
+    <div style="position:relative; height:200px;">
+      <canvas id="signalOverviewChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Signal Table -->
+<div class="card card-styled">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0 data-table">
+        <thead class="table-dark">
+          <tr><th>ONT Name</th><th>OLT</th><th>PON Port</th><th>RX Power</th><th>TX Power</th><th>OLT RX</th><th>Distance</th><th>Quality</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for ont in onts %}
+          <tr>
+            <td class="fw-medium">{{ ont.name }}</td>
+            <td><a href="{% url 'olt_detail' ont.olt.pk %}" class="text-decoration-none">{{ ont.olt.name }}</a></td>
+            <td class="text-muted" style="font-size:0.8rem;">{% if ont.pon_port %}B{{ ont.pon_port.board }}/P{{ ont.pon_port.port }}{% else %}—{% endif %}</td>
+            <td><span class="badge {{ ont.signal_badge_class }}">{{ ont.rx_power }} dBm</span></td>
+            <td class="text-muted" style="font-size:0.82rem;">{{ ont.tx_power }} dBm</td>
+            <td class="text-muted" style="font-size:0.82rem;">{{ ont.olt_rx_power }} dBm</td>
+            <td class="text-muted" style="font-size:0.82rem;">{{ ont.distance }} km</td>
+            <td>
+              <span class="badge {{ ont.signal_badge_class }}">{{ ont.signal_quality|capfirst }}</span>
+            </td>
+            <td><a href="{% url 'ont_detail' ont.pk %}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;">Details</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9" class="text-center text-muted py-5">
+            <i class="fa-solid fa-signal fa-2x mb-2 d-block"></i>No online ONTs found
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/monitoring/api/signals-chart/')
+  .then(r => r.json()).then(data => {
+    const colors = data.rx_power.map(v => v >= -23 ? '#10b981' : v >= -27 ? '#f59e0b' : '#ef4444');
+    new Chart(document.getElementById('signalOverviewChart').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: data.labels,
+        datasets: [
+          { label: 'RX Power (dBm)', data: data.rx_power, backgroundColor: colors, borderRadius: 4 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: 'x',
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} dBm` } } },
+        scales: {
+          y: { title: { display: true, text: 'RX Power (dBm)', font: { size: 11 } }, ticks: { callback: v => v + ' dBm', font: { size: 10 } } },
+          x: { ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  });
+$(document).ready(() => { if ($('.data-table').length) $('.data-table').DataTable({ pageLength: 25, order: [[3, 'asc']] }); });
+</script>
+{% endblock %}

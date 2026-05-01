@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}ONT Profiles{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'ont_list' %}">ONTs</a></li>
+<li class="breadcrumb-item active">Profiles</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-sliders me-2 text-primary"></i>ONT Speed Profiles</h4>
+    <p class="page-subtitle">Bandwidth and protocol profiles assigned to ONTs</p>
+  </div>
+</div>
+<div class="card card-styled">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-dark">
+          <tr><th>Profile Name</th><th>Vendor</th><th>Download</th><th>Upload</th><th>Protocol</th><th>VLAN ID</th><th>ONTs Using</th></tr>
+        </thead>
+        <tbody>
+          {% for profile in profiles %}
+          <tr>
+            <td class="fw-medium">{{ profile.name }}</td>
+            <td><span class="badge bg-secondary">{{ profile.get_vendor_display }}</span></td>
+            <td><span class="badge bg-success-subtle text-success">{{ profile.download_speed }} Mbps</span></td>
+            <td><span class="badge bg-primary-subtle text-primary">{{ profile.upload_speed }} Mbps</span></td>
+            <td><span class="badge bg-info-subtle text-info">{{ profile.get_protocol_display }}</span></td>
+            <td>{{ profile.vlan_id|default:"—" }}</td>
+            <td><span class="badge bg-secondary">{{ profile.ont_set.count }}</span></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-4">No profiles found</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

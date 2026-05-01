@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.smartolt.com)",
+      "Read(//d/p_project/**)"
+    ]
+  }
+}

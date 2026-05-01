@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}Traffic Monitoring{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item">Monitoring</li>
+<li class="breadcrumb-item active">Traffic</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-wave-square me-2 text-primary"></i>Traffic Monitoring</h4>
+    <p class="page-subtitle">Real-time bandwidth utilization across all ONTs</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card card-styled mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-auto">
+        <select name="olt" class="form-select form-select-sm">
+          <option value="">All OLTs</option>
+          {% for olt in olts %}
+          <option value="{{ olt.pk }}" {% if olt_filter == olt.pk|stringformat:"s" %}selected{% endif %}>{{ olt.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+        <a href="{% url 'monitoring_traffic' %}" class="btn btn-sm btn-outline-secondary ms-1">Clear</a>
+      </div>
+      <div class="ms-auto col-auto"><span class="badge bg-secondary">{{ onts|length }} ONTs online</span></div>
+    </form>
+  </div>
+</div>
+
+<!-- Traffic Overview Chart -->
+<div class="card card-styled mb-3">
+  <div class="card-header-styled"><h6 class="mb-0"><i class="fa-solid fa-chart-area me-2 text-primary"></i>Aggregate Traffic (24h)</h6></div>
+  <div class="card-body">
+    <div style="position:relative; height:200px;">
+      <canvas id="trafficAggChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Traffic Table -->
+<div class="card card-styled">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0 data-table">
+        <thead class="table-dark">
+          <tr><th>ONT Name</th><th>OLT</th><th>Profile</th><th>Max Down</th><th>Max Up</th><th>Current RX</th><th>Mode</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for ont in onts %}
+          <tr>
+            <td class="fw-medium">{{ ont.name }}</td>
+            <td><a href="{% url 'olt_detail' ont.olt.pk %}" class="text-decoration-none">{{ ont.olt.name }}</a></td>
+            <td style="font-size:0.82rem;">{{ ont.profile.name|default:"—" }}</td>
+            <td><span class="badge bg-primary-subtle text-primary">{% if ont.profile %}{{ ont.profile.download_speed }} Mbps{% else %}—{% endif %}</span></td>
+            <td><span class="badge bg-success-subtle text-success">{% if ont.profile %}{{ ont.profile.upload_speed }} Mbps{% else %}—{% endif %}</span></td>
+            <td>
+              <div class="progress" style="height:8px; width:80px;" title="{{ ont.rx_power }} dBm">
+                <div class="progress-bar {{ ont.signal_badge_class|cut:' text-dark' }}" style="width:{{ ont.rx_power|add:40|floatformat:0 }}%"></div>
+              </div>
+              <small class="text-muted">{{ ont.rx_power }} dBm</small>
+            </td>
+            <td><span class="badge bg-secondary-subtle text-secondary">{{ ont.get_mode_display }}</span></td>
+            <td><a href="{% url 'ont_detail' ont.pk %}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;">Details</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center text-muted py-4">No online ONTs found</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/monitoring/api/traffic-chart/')
+  .then(r => r.json()).then(data => {
+    new Chart(document.getElementById('trafficAggChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [
+          { label: 'Download (Mbps)', data: data.download, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.12)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
+          { label: 'Upload (Mbps)', data: data.upload, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.12)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } },
+        scales: {
+          y: { beginAtZero: true, ticks: { callback: v => v + ' Mbps', font: { size: 10 } } },
+          x: { ticks: { font: { size: 10 }, maxTicksLimit: 12 } }
+        }
+      }
+    });
+  });
+$(document).ready(() => { if ($('.data-table').length) $('.data-table').DataTable({ pageLength: 25 }); });
+</script>
+{% endblock %}
