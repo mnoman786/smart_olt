@@ -41,18 +41,6 @@ class OLT(models.Model):
         return f"{self.name} ({self.vendor} {self.model})"
 
     @property
-    def ont_count(self):
-        return self.onts.count()
-
-    @property
-    def online_ont_count(self):
-        return self.onts.filter(status='online').count()
-
-    @property
-    def offline_ont_count(self):
-        return self.onts.filter(status__in=['offline', 'los', 'power_failure', 'fiber_cut']).count()
-
-    @property
     def status_badge_class(self):
         return STATUS_BADGE.get(self.status, 'bg-secondary')
 

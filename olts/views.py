@@ -15,14 +15,7 @@ def olt_list(request):
     vendor = request.GET.get('vendor', '')
     status = request.GET.get('status', '')
 
-    olts = OLT.objects.annotate(
-        ont_count=Count('onts'),
-        online_ont_count=Count('onts', filter=Q(onts__status='online')),
-        offline_ont_count=Count(
-            'onts',
-            filter=Q(onts__status__in=['offline', 'los', 'power_failure', 'fiber_cut'])
-        ),
-    )
+    olts = _olt_qs()
     if search:
         olts = olts.filter(
             Q(name__icontains=search) |
@@ -42,9 +35,20 @@ def olt_list(request):
     })
 
 
+def _olt_qs():
+    return OLT.objects.annotate(
+        ont_count=Count('onts'),
+        online_ont_count=Count('onts', filter=Q(onts__status='online')),
+        offline_ont_count=Count(
+            'onts',
+            filter=Q(onts__status__in=['offline', 'los', 'power_failure', 'fiber_cut'])
+        ),
+    )
+
+
 @login_required
 def olt_detail(request, pk):
-    olt = get_object_or_404(OLT, pk=pk)
+    olt = get_object_or_404(_olt_qs(), pk=pk)
     pon_ports = olt.pon_ports.all()
     recent_events = Event.objects.filter(olt=olt).select_related('ont').order_by('-timestamp')[:20]
     return render(request, 'olts/detail.html', {
