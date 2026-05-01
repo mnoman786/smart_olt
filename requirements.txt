@@ -5,3 +5,13 @@ Pillow==10.3.0
 python-decouple==3.8
 whitenoise==6.6.0
 django-extensions==3.2.3
+
+# SSH / SNMP connectivity
+netmiko==4.3.0
+pysnmp==4.4.12
+
+# Task queue (background polling for 1000+ OLTs)
+celery[redis]==5.3.6
+redis==5.0.3
+django-celery-beat==2.6.0
+django-celery-results==2.5.1

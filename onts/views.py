@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from .models import ONT, ONTProfile
 from .forms import ONTForm, ONTProfileForm
 from monitoring.models import SignalHistory, TrafficHistory, Event
+from core.utils import operator_required, admin_required
 
 
 @login_required
@@ -29,14 +30,13 @@ def ont_list(request):
         onts = onts.filter(technology=technology)
 
     from olts.models import OLT
-    olts = OLT.objects.all()
     return render(request, 'onts/list.html', {
         'onts': onts,
         'search': search,
         'status_filter': status,
         'olt_filter': olt_id,
         'tech_filter': technology,
-        'olts': olts,
+        'olts': OLT.objects.all(),
         'status_choices': ONT.STATUS_CHOICES,
     })
 
@@ -49,10 +49,8 @@ def ont_detail(request, pk):
 
 
 @login_required
+@operator_required
 def ont_create(request):
-    if not request.user.profile.is_operator:
-        messages.error(request, 'Access denied.')
-        return redirect('ont_list')
     if request.method == 'POST':
         form = ONTForm(request.POST)
         if form.is_valid():
@@ -65,10 +63,8 @@ def ont_create(request):
 
 
 @login_required
+@operator_required
 def ont_edit(request, pk):
-    if not request.user.profile.is_operator:
-        messages.error(request, 'Access denied.')
-        return redirect('ont_list')
     ont = get_object_or_404(ONT, pk=pk)
     if request.method == 'POST':
         form = ONTForm(request.POST, instance=ont)
@@ -82,10 +78,8 @@ def ont_edit(request, pk):
 
 
 @login_required
+@admin_required
 def ont_delete(request, pk):
-    if not request.user.profile.is_admin:
-        messages.error(request, 'Access denied.')
-        return redirect('ont_list')
     ont = get_object_or_404(ONT, pk=pk)
     if request.method == 'POST':
         name = ont.name
@@ -96,27 +90,45 @@ def ont_delete(request, pk):
 
 
 @login_required
+@operator_required
 def ont_reboot(request, pk):
-    if request.method == 'POST':
-        ont = get_object_or_404(ONT, pk=pk)
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error'}, status=405)
+    ont = get_object_or_404(ONT, pk=pk)
+    try:
+        from olts.tasks import send_ont_command
+        task = send_ont_command.delay(ont.olt_id, ont.pk, 'reboot')
+        return JsonResponse({'status': 'queued', 'task_id': task.id,
+                             'message': 'Reboot command queued.'})
+    except Exception:
+        from olts.ssh_service import send_ont_command_sync
+        result = send_ont_command_sync(ont, 'reboot')
         Event.objects.create(
             type='rebooted', severity='info', olt=ont.olt, ont=ont,
-            message=f'ONT {ont.name} ({ont.serial_number}) rebooted by {request.user.username}.'
+            message=f'ONT {ont.name} rebooted by {request.user.username}. {result.get("message", "")}'
         )
-        return JsonResponse({'status': 'ok', 'message': 'Reboot command sent.'})
-    return JsonResponse({'status': 'error'}, status=405)
+        return JsonResponse({'status': 'ok', 'message': result.get('message', 'Reboot command sent.')})
 
 
 @login_required
+@operator_required
 def ont_factory_reset(request, pk):
-    if request.method == 'POST':
-        ont = get_object_or_404(ONT, pk=pk)
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error'}, status=405)
+    ont = get_object_or_404(ONT, pk=pk)
+    try:
+        from olts.tasks import send_ont_command
+        task = send_ont_command.delay(ont.olt_id, ont.pk, 'factory_reset')
+        return JsonResponse({'status': 'queued', 'task_id': task.id,
+                             'message': 'Factory reset command queued.'})
+    except Exception:
+        from olts.ssh_service import send_ont_command_sync
+        result = send_ont_command_sync(ont, 'factory_reset')
         Event.objects.create(
             type='factory_reset', severity='warning', olt=ont.olt, ont=ont,
-            message=f'ONT {ont.name} ({ont.serial_number}) factory reset by {request.user.username}.'
+            message=f'ONT {ont.name} factory reset by {request.user.username}. {result.get("message", "")}'
         )
-        return JsonResponse({'status': 'ok', 'message': 'Factory reset command sent.'})
-    return JsonResponse({'status': 'error'}, status=405)
+        return JsonResponse({'status': 'ok', 'message': result.get('message', 'Factory reset command sent.')})
 
 
 @login_required

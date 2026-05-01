@@ -15,10 +15,13 @@
     </h4>
     <p class="page-subtitle">{{ olt.model }} &nbsp;•&nbsp; {{ olt.ip_address }} &nbsp;•&nbsp; {{ olt.location|default:"No location" }}</p>
   </div>
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 flex-wrap">
     {% if request.user.profile.is_operator %}
+    <button class="btn btn-outline-info btn-sm" id="testConnBtn" onclick="testConnection({{ olt.pk }})">
+      <i class="fa-solid fa-plug me-1"></i>Test SSH
+    </button>
     <button class="btn btn-outline-secondary btn-sm" id="refreshBtn" onclick="refreshOLT({{ olt.pk }})">
-      <i class="fa-solid fa-rotate me-1"></i>Refresh
+      <i class="fa-solid fa-rotate me-1"></i>Poll Now
     </button>
     <a href="{% url 'olt_edit' olt.pk %}" class="btn btn-outline-primary btn-sm">
       <i class="fa-solid fa-pen me-1"></i>Edit
@@ -31,6 +34,9 @@
     {% endif %}
   </div>
 </div>
+
+<!-- SSH Test Result -->
+<div id="sshAlert" class="alert d-none mb-3"></div>
 
 <!-- Info Cards Row -->
 <div class="row g-3 mb-4">
@@ -217,24 +223,72 @@
 
 {% block extra_js %}
 <script>
+const CSRF = '{{ csrf_token }}';
+
+function showSshAlert(html, type) {
+  const el = document.getElementById('sshAlert');
+  el.className = `alert alert-${type} alert-dismissible fade show`;
+  el.innerHTML = html + ' <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+}
+
+function testConnection(id) {
+  const btn = document.getElementById('testConnBtn');
+  btn.innerHTML = '<i class="fa-solid fa-plug fa-spin me-1"></i>Testing...';
+  btn.disabled = true;
+  fetch(`/olts/${id}/test-connection/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json()).then(d => {
+      if (d.connected) {
+        showSshAlert(
+          `<i class="fa-solid fa-circle-check me-1"></i><strong>SSH OK</strong> — ` +
+          `${d.vendor} &nbsp;|&nbsp; firmware: <code>${d.firmware || 'N/A'}</code> &nbsp;|&nbsp; latency: ${d.latency_ms} ms`,
+          'success'
+        );
+      } else {
+        showSshAlert(`<i class="fa-solid fa-circle-xmark me-1"></i><strong>SSH Failed</strong> — ${d.error}`, 'danger');
+      }
+    }).finally(() => {
+      btn.innerHTML = '<i class="fa-solid fa-plug me-1"></i>Test SSH';
+      btn.disabled = false;
+    });
+}
+
 function refreshOLT(id) {
   const btn = document.getElementById('refreshBtn');
-  btn.innerHTML = '<i class="fa-solid fa-rotate fa-spin me-1"></i>Refreshing...';
+  btn.innerHTML = '<i class="fa-solid fa-rotate fa-spin me-1"></i>Polling...';
   btn.disabled = true;
-  fetch(`/olts/${id}/refresh/`, {
-    method: 'POST',
-    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
-  }).then(r => r.json()).then(data => {
-    if (data.status === 'ok') {
-      document.getElementById('cpuVal').textContent = data.cpu_usage + '%';
-      document.getElementById('memVal').textContent = data.memory_usage + '%';
-      document.getElementById('tempVal').textContent = data.temperature + '°C';
-      document.getElementById('cpuBar').style.width = data.cpu_usage + '%';
-      document.getElementById('memBar').style.width = data.memory_usage + '%';
-    }
-    btn.innerHTML = '<i class="fa-solid fa-rotate me-1"></i>Refresh';
-    btn.disabled = false;
-  });
+  fetch(`/olts/${id}/refresh/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json()).then(data => {
+      if (data.status === 'ok') {
+        updatePerfUI(data);
+      } else if (data.status === 'queued') {
+        pollTaskUntilDone(data.task_id, updatePerfUI);
+      }
+    }).finally(() => {
+      btn.innerHTML = '<i class="fa-solid fa-rotate me-1"></i>Poll Now';
+      btn.disabled = false;
+    });
+}
+
+function updatePerfUI(data) {
+  if (data.cpu_usage !== undefined) {
+    document.getElementById('cpuVal').textContent = data.cpu_usage + '%';
+    document.getElementById('memVal').textContent = data.memory_usage + '%';
+    document.getElementById('tempVal').textContent = data.temperature + '°C';
+    document.getElementById('cpuBar').style.width = data.cpu_usage + '%';
+    document.getElementById('memBar').style.width = data.memory_usage + '%';
+    document.getElementById('tempBar').style.width = Math.min(data.temperature, 100) + '%';
+  }
+}
+
+function pollTaskUntilDone(taskId, onDone, attempts=0) {
+  if (attempts > 30) return;
+  setTimeout(() => {
+    fetch(`/olts/task/${taskId}/status/`)
+      .then(r => r.json()).then(d => {
+        if (d.status === 'done' && d.result) onDone(d.result);
+        else if (d.status === 'pending') pollTaskUntilDone(taskId, onDone, attempts + 1);
+      });
+  }, 1500);
 }
 
 // Metrics chart

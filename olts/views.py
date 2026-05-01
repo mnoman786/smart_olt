@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from .models import OLT, PONPort
 from .forms import OLTForm, PONPortForm
 from monitoring.models import OLTMetrics, Event
-import random
+from core.utils import operator_required, admin_required
 
 
 @login_required
@@ -14,13 +14,26 @@ def olt_list(request):
     search = request.GET.get('q', '')
     vendor = request.GET.get('vendor', '')
     status = request.GET.get('status', '')
-    olts = OLT.objects.all()
+
+    olts = OLT.objects.annotate(
+        ont_count=Count('onts'),
+        online_ont_count=Count('onts', filter=Q(onts__status='online')),
+        offline_ont_count=Count(
+            'onts',
+            filter=Q(onts__status__in=['offline', 'los', 'power_failure', 'fiber_cut'])
+        ),
+    )
     if search:
-        olts = olts.filter(Q(name__icontains=search) | Q(ip_address__icontains=search) | Q(location__icontains=search))
+        olts = olts.filter(
+            Q(name__icontains=search) |
+            Q(ip_address__icontains=search) |
+            Q(location__icontains=search)
+        )
     if vendor:
         olts = olts.filter(vendor=vendor)
     if status:
         olts = olts.filter(status=status)
+
     return render(request, 'olts/list.html', {
         'olts': olts,
         'search': search,
@@ -32,22 +45,18 @@ def olt_list(request):
 @login_required
 def olt_detail(request, pk):
     olt = get_object_or_404(OLT, pk=pk)
-    pon_ports = olt.pon_ports.all()
-    recent_events = Event.objects.filter(olt=olt).order_by('-timestamp')[:20]
-    metrics = OLTMetrics.objects.filter(olt=olt).order_by('-timestamp')[:48]
+    pon_ports = olt.pon_ports.annotate(ont_count=Count('onts'))
+    recent_events = Event.objects.filter(olt=olt).select_related('ont').order_by('-timestamp')[:20]
     return render(request, 'olts/detail.html', {
         'olt': olt,
         'pon_ports': pon_ports,
         'recent_events': recent_events,
-        'metrics': metrics,
     })
 
 
 @login_required
+@operator_required
 def olt_create(request):
-    if not request.user.profile.is_operator:
-        messages.error(request, 'Access denied.')
-        return redirect('olt_list')
     if request.method == 'POST':
         form = OLTForm(request.POST)
         if form.is_valid():
@@ -60,10 +69,8 @@ def olt_create(request):
 
 
 @login_required
+@operator_required
 def olt_edit(request, pk):
-    if not request.user.profile.is_operator:
-        messages.error(request, 'Access denied.')
-        return redirect('olt_list')
     olt = get_object_or_404(OLT, pk=pk)
     if request.method == 'POST':
         form = OLTForm(request.POST, instance=olt)
@@ -77,10 +84,8 @@ def olt_edit(request, pk):
 
 
 @login_required
+@admin_required
 def olt_delete(request, pk):
-    if not request.user.profile.is_admin:
-        messages.error(request, 'Access denied.')
-        return redirect('olt_list')
     olt = get_object_or_404(OLT, pk=pk)
     if request.method == 'POST':
         name = olt.name
@@ -88,23 +93,6 @@ def olt_delete(request, pk):
         messages.success(request, f'OLT "{name}" deleted.')
         return redirect('olt_list')
     return render(request, 'olts/confirm_delete.html', {'olt': olt})
-
-
-@login_required
-def olt_refresh(request, pk):
-    if request.method == 'POST':
-        olt = get_object_or_404(OLT, pk=pk)
-        olt.cpu_usage = round(random.uniform(10, 70), 1)
-        olt.memory_usage = round(random.uniform(30, 80), 1)
-        olt.temperature = round(random.uniform(35, 55), 1)
-        olt.save(update_fields=['cpu_usage', 'memory_usage', 'temperature'])
-        return JsonResponse({
-            'status': 'ok',
-            'cpu_usage': olt.cpu_usage,
-            'memory_usage': olt.memory_usage,
-            'temperature': olt.temperature,
-        })
-    return JsonResponse({'status': 'error'}, status=405)
 
 
 @login_required
@@ -117,3 +105,49 @@ def olt_metrics_data(request, pk):
         'memory': [m.memory_usage for m in metrics],
         'temperature': [m.temperature for m in metrics],
     })
+
+
+@login_required
+@operator_required
+def olt_refresh(request, pk):
+    """Trigger an SSH poll for this OLT. Returns immediately with a task ID."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error'}, status=405)
+
+    olt = get_object_or_404(OLT, pk=pk)
+
+    try:
+        from .tasks import poll_olt_stats
+        task = poll_olt_stats.delay(olt.pk)
+        return JsonResponse({'status': 'queued', 'task_id': task.id})
+    except Exception:
+        # Celery not running — execute synchronously (demo / dev mode)
+        from .ssh_service import poll_olt_stats_sync
+        result = poll_olt_stats_sync(olt)
+        return JsonResponse({'status': 'ok', **result})
+
+
+@login_required
+@operator_required
+def olt_test_connection(request, pk):
+    """Test SSH connectivity to an OLT and return results as JSON."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error'}, status=405)
+
+    olt = get_object_or_404(OLT, pk=pk)
+    from .ssh_service import test_connection
+    result = test_connection(olt)
+    return JsonResponse(result)
+
+
+@login_required
+def olt_task_status(request, task_id):
+    """Poll Celery task result."""
+    try:
+        from celery.result import AsyncResult
+        res = AsyncResult(task_id)
+        if res.ready():
+            return JsonResponse({'status': 'done', 'result': res.result})
+        return JsonResponse({'status': 'pending'})
+    except Exception:
+        return JsonResponse({'status': 'unavailable'})

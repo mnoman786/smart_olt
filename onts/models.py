@@ -1,5 +1,6 @@
 from django.db import models
 from olts.models import OLT, PONPort
+from core.utils import format_uptime, STATUS_BADGE, SIGNAL_EXCELLENT, SIGNAL_GOOD, SIGNAL_FAIR
 
 
 class ONTProfile(models.Model):
@@ -88,11 +89,11 @@ class ONT(models.Model):
     def signal_quality(self):
         if self.status != 'online':
             return 'unknown'
-        if self.rx_power >= -20:
+        if self.rx_power >= SIGNAL_EXCELLENT:
             return 'excellent'
-        elif self.rx_power >= -23:
+        if self.rx_power >= SIGNAL_GOOD:
             return 'good'
-        elif self.rx_power >= -27:
+        if self.rx_power >= SIGNAL_FAIR:
             return 'fair'
         return 'poor'
 
@@ -108,28 +109,11 @@ class ONT(models.Model):
 
     @property
     def status_badge_class(self):
-        return {
-            'online': 'bg-success',
-            'offline': 'bg-danger',
-            'los': 'bg-danger',
-            'power_failure': 'bg-warning text-dark',
-            'fiber_cut': 'bg-danger',
-            'degraded': 'bg-warning text-dark',
-            'provisioning': 'bg-info',
-        }.get(self.status, 'bg-secondary')
+        return STATUS_BADGE.get(self.status, 'bg-secondary')
 
     @property
     def uptime_formatted(self):
-        if not self.uptime:
-            return 'N/A'
-        days = self.uptime // 86400
-        hours = (self.uptime % 86400) // 3600
-        minutes = (self.uptime % 3600) // 60
-        if days > 0:
-            return f"{days}d {hours}h {minutes}m"
-        elif hours > 0:
-            return f"{hours}h {minutes}m"
-        return f"{minutes}m"
+        return format_uptime(self.uptime)
 
     class Meta:
         ordering = ['olt', 'pon_port', 'ont_id']

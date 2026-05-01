@@ -18,6 +18,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'crispy_forms',
     'crispy_bootstrap5',
+    'django_celery_beat',
+    'django_celery_results',
     'accounts',
     'olts',
     'onts',
@@ -99,4 +101,28 @@ from django.contrib.messages import constants as message_constants
 MESSAGE_TAGS = {
     message_constants.ERROR: 'danger',
 }
+
+# ── Cache (used by context processors; switch to Redis in production) ─────────
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
+
+# ── Celery ────────────────────────────────────────────────────────────────────
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_CACHE_BACKEND = 'default'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = TIME_ZONE
+# Max 20 concurrent SSH connections per worker
+CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_CONCURRENCY', 20))
+
+# ── OLT connectivity ──────────────────────────────────────────────────────────
+# Set to False (and configure Redis) when real OLT hardware is available.
+OLT_DEMO_MODE = os.environ.get('OLT_DEMO_MODE', 'true').lower() != 'false'
+OLT_SSH_TIMEOUT = int(os.environ.get('OLT_SSH_TIMEOUT', 30))
+OLT_SSH_MAX_CONCURRENT = int(os.environ.get('OLT_SSH_MAX_CONCURRENT', 50))
 

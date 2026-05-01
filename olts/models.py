@@ -1,4 +1,5 @@
 from django.db import models
+from core.utils import format_uptime, STATUS_BADGE
 
 
 class OLT(models.Model):
@@ -53,12 +54,7 @@ class OLT(models.Model):
 
     @property
     def status_badge_class(self):
-        return {
-            'online': 'bg-success',
-            'offline': 'bg-danger',
-            'warning': 'bg-warning text-dark',
-            'unknown': 'bg-secondary',
-        }.get(self.status, 'bg-secondary')
+        return STATUS_BADGE.get(self.status, 'bg-secondary')
 
     @property
     def vendor_badge_class(self):
@@ -66,16 +62,7 @@ class OLT(models.Model):
 
     @property
     def uptime_formatted(self):
-        if not self.uptime:
-            return 'N/A'
-        days = self.uptime // 86400
-        hours = (self.uptime % 86400) // 3600
-        minutes = (self.uptime % 3600) // 60
-        if days > 0:
-            return f"{days}d {hours}h {minutes}m"
-        elif hours > 0:
-            return f"{hours}h {minutes}m"
-        return f"{minutes}m"
+        return format_uptime(self.uptime)
 
     class Meta:
         verbose_name = 'OLT'
