@@ -529,16 +529,21 @@ def discover_unregistered_onts_sync(olt, pon_port) -> list[dict]:
     from .models import DiscoveredONT
 
     if DEMO_MODE:
-        # Generate 2-4 fake unregistered serials not already in the DB
-        existing = set(ONT.objects.filter(pon_port=pon_port).values_list('serial_number', flat=True))
+        # Use port PK as seed so the same port always "discovers" the same
+        # fake devices — simulates real hardware where physically-connected
+        # ONTs don't change between scans.
+        rng = random.Random(pon_port.pk * 31337)
         fake_prefix = 'ZTEG' if olt.vendor == 'ZTE' else '48575443'
-        candidates = [
-            f'{fake_prefix}{random.randint(10000000, 99999999):08d}' for _ in range(4)
+        device_model = 'ZTE-F660' if olt.vendor == 'ZTE' else 'Huawei EG8145V5'
+        # Generate a fixed set of 3 serials tied to this port
+        stable_serials = [
+            f'{fake_prefix}{rng.randint(10000000, 99999999):08d}' for _ in range(3)
         ]
+        registered = set(ONT.objects.filter(pon_port=pon_port).values_list('serial_number', flat=True))
         found = [
-            {'serial_number': s, 'vendor_info': f'{"ZTE-F660" if olt.vendor == "ZTE" else "Huawei EG8145V5"} (demo)'}
-            for s in candidates if s not in existing
-        ][:3]
+            {'serial_number': s, 'vendor_info': f'{device_model} (demo)'}
+            for s in stable_serials if s not in registered
+        ]
     else:
         board = pon_port.board
         port_b = 1

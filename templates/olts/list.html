@@ -6,418 +6,356 @@
 
 {% block extra_css %}
 <style>
-/* ── Summary bar ── */
-.olt-summary-bar {
+/* ── Summary Bar ── */
+.summary-bar {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
   margin-bottom: 24px;
 }
-.olt-summary-tile {
-  background: #fff;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.olt-summary-icon {
-  width: 42px; height: 42px;
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.1rem;
-  flex-shrink: 0;
-}
-.olt-summary-tile .val { font-size: 1.5rem; font-weight: 800; line-height: 1; }
-.olt-summary-tile .lbl { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
-
-/* ── Filter bar ── */
-.filter-row {
+.summary-tile {
   background: #fff;
   border: 1.5px solid #e2e8f0;
   border-radius: 12px;
   padding: 14px 18px;
-  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.summary-tile .st-icon {
+  width: 38px; height: 38px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; flex-shrink: 0;
+}
+.summary-tile .val { font-size: 1.4rem; font-weight: 800; line-height: 1; }
+.summary-tile .lbl { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+/* ── Filter Bar ── */
+.filter-row {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-/* ── OLT Card ── */
-.olt-card-link { text-decoration: none !important; display: block; height: 100%; }
-.olt-card-wrap {
+/* ── OLT Row ── */
+.olt-list { display: flex; flex-direction: column; gap: 10px; }
+
+.olt-row {
   background: #fff;
   border: 1.5px solid #e2e8f0;
-  border-radius: 14px;
-  overflow: hidden;
-  height: 100%;
-  transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
-  position: relative;
-}
-.olt-card-wrap:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 32px rgba(0,0,0,0.10);
-  border-color: #93c5fd;
-}
-
-/* Status accent strip */
-.olt-card-strip {
-  height: 4px;
-  width: 100%;
-}
-.strip-online  { background: linear-gradient(90deg, #22c55e, #4ade80); }
-.strip-offline { background: linear-gradient(90deg, #ef4444, #f87171); }
-.strip-warning { background: linear-gradient(90deg, #f59e0b, #fcd34d); }
-.strip-unknown { background: linear-gradient(90deg, #94a3b8, #cbd5e1); }
-
-.olt-card-body { padding: 18px 20px 16px; }
-
-/* Vendor + status header */
-.olt-card-top {
+  border-radius: 12px;
+  border-left: 5px solid #e2e8f0;
+  padding: 16px 20px;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 14px;
+  align-items: center;
+  gap: 18px;
+  text-decoration: none !important;
+  color: inherit;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
 }
-.olt-vendor-badge {
-  font-size: 0.67rem; font-weight: 700; letter-spacing: 0.06em;
-  padding: 3px 9px; border-radius: 6px; margin-bottom: 5px;
-  display: inline-block;
+.olt-row:hover {
+  box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+  transform: translateX(2px);
 }
-.olt-name {
-  font-size: 1rem; font-weight: 700; color: #0f172a;
-  line-height: 1.2; margin-bottom: 3px;
-}
-.olt-location { font-size: 0.75rem; color: #94a3b8; }
+.olt-row.s-online  { border-left-color: #22c55e; }
+.olt-row.s-offline { border-left-color: #ef4444; }
+.olt-row.s-warning { border-left-color: #f59e0b; }
+.olt-row.s-unknown { border-left-color: #94a3b8; }
 
-/* Status pill */
-.olt-status-pill {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 0.72rem; font-weight: 600;
-  padding: 4px 10px; border-radius: 20px;
-  white-space: nowrap;
-  flex-shrink: 0;
+/* Status icon bubble */
+.olt-icon {
+  width: 46px; height: 46px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; flex-shrink: 0;
 }
-.sp-online  { background: #dcfce7; color: #15803d; }
-.sp-offline { background: #fee2e2; color: #b91c1c; }
-.sp-warning { background: #fef9c3; color: #92400e; }
-.sp-unknown { background: #f1f5f9; color: #475569; }
+.olt-icon.s-online  { background: #f0fdf4; color: #16a34a; }
+.olt-icon.s-offline { background: #fff1f2; color: #dc2626; }
+.olt-icon.s-warning { background: #fffbeb; color: #d97706; }
+.olt-icon.s-unknown { background: #f8fafc; color: #94a3b8; }
+
+/* Name block */
+.olt-name-block { flex: 1; min-width: 0; }
+.olt-name { font-size: 0.95rem; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.olt-meta { font-size: 0.72rem; color: #94a3b8; margin-top: 3px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.olt-meta code { font-size: 0.7rem; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; color: #475569; }
+
+/* ONT dot bar — shows online/offline/free visually */
+.ont-dot-bar {
+  display: flex; gap: 2px; align-items: center;
+  min-width: 120px; max-width: 160px; flex-wrap: wrap;
+}
+.ont-dot {
+  width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0;
+}
+.dot-on   { background: #22c55e; }
+.dot-off  { background: #ef4444; }
+.dot-free { background: #e2e8f0; }
+
+/* Stat boxes */
+.olt-stats { display: flex; gap: 6px; flex-shrink: 0; }
+.olt-stat {
+  display: flex; flex-direction: column; align-items: center;
+  background: #f8fafc; border-radius: 8px;
+  padding: 6px 12px; min-width: 58px;
+}
+.olt-stat .sv { font-size: 1rem; font-weight: 800; line-height: 1; }
+.olt-stat .sl { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin-top: 2px; }
+
+/* Status badge */
+.olt-status-badge {
+  font-size: 0.68rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; flex-shrink: 0;
+}
+.sb-online  { background: #dcfce7; color: #15803d; }
+.sb-offline { background: #fee2e2; color: #b91c1c; }
+.sb-warning { background: #fef9c3; color: #92400e; }
+.sb-unknown { background: #f1f5f9; color: #64748b; }
 
 /* Pulse dot */
-.pulse-dot {
-  width: 7px; height: 7px; border-radius: 50%;
+.pulse {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle;
 }
-.pd-online {
-  background: #22c55e;
-  box-shadow: 0 0 0 0 rgba(34,197,94,0.6);
-  animation: pulse-green 1.6s infinite;
-}
-.pd-offline  { background: #ef4444; }
-.pd-warning  { background: #f59e0b; }
-.pd-unknown  { background: #94a3b8; }
-
+.pulse-on  { background: #22c55e; animation: pulse-green 1.6s infinite; }
+.pulse-off { background: #ef4444; }
+.pulse-warn{ background: #f59e0b; }
 @keyframes pulse-green {
   0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-  70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+  70%  { box-shadow: 0 0 0 5px rgba(34,197,94,0); }
   100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
 }
 
-/* ONT stat row */
-.ont-stat-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-.ont-stat {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 8px 6px;
-  text-align: center;
-}
-.ont-stat .v { font-size: 1.2rem; font-weight: 800; line-height: 1; }
-.ont-stat .l { font-size: 0.62rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+/* Actions */
+.olt-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
-/* Perf row */
-.perf-row { margin-bottom: 14px; }
-.perf-item {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 6px; font-size: 0.75rem;
+/* Column header */
+.olt-col-header {
+  display: flex; align-items: center; gap: 18px;
+  padding: 4px 20px 8px 25px;
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em;
+  color: #94a3b8; font-weight: 600;
 }
-.perf-label { width: 34px; color: #94a3b8; flex-shrink: 0; }
-.perf-bar-track { flex: 1; background: #f1f5f9; border-radius: 4px; height: 6px; overflow: hidden; }
-.perf-bar-fill  { height: 100%; border-radius: 4px; }
-.perf-val { width: 36px; text-align: right; font-weight: 600; color: #475569; }
-
-/* IP + uptime footer */
-.olt-card-meta {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 0.73rem; color: #64748b;
-  padding-top: 12px;
-  border-top: 1px solid #f1f5f9;
-  margin-bottom: 14px;
-}
-
-/* Action buttons */
-.olt-card-actions { display: flex; gap: 8px; }
-.olt-card-actions .btn { font-size: 0.78rem; padding: 6px 14px; }
 
 /* Empty state */
-.olt-empty {
-  text-align: center; padding: 60px 20px; color: #94a3b8;
+.olt-empty { text-align: center; padding: 60px 20px; color: #94a3b8; }
+.olt-empty i { font-size: 3rem; margin-bottom: 14px; display: block; opacity: 0.2; }
+
+@media (max-width: 768px) {
+  .ont-dot-bar, .olt-stats { display: none; }
 }
-.olt-empty i { font-size: 3rem; margin-bottom: 14px; display: block; opacity: 0.25; }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<!-- ── Page Header ── -->
-<div class="page-header">
+<!-- ── Header ── -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
   <div>
-    <h4 class="page-title"><i class="fa-solid fa-server me-2 text-primary"></i>OLT Management</h4>
-    <p class="page-subtitle">Manage your ZTE and Huawei Optical Line Terminals</p>
+    <h4 class="page-title mb-1"><i class="fa-solid fa-server me-2 text-primary"></i>OLTs</h4>
+    <p class="page-subtitle mb-0">Your fiber network equipment — click any device to see its ports and customers</p>
   </div>
   {% if request.user.profile.is_operator %}
   <a href="{% url 'olt_create' %}" class="btn btn-primary">
-    <i class="fa-solid fa-plus me-1"></i>Add OLT
+    <i class="fa-solid fa-plus me-2"></i>Add OLT
   </a>
   {% endif %}
 </div>
 
 <!-- ── Summary Tiles ── -->
-<div class="olt-summary-bar">
-  <div class="olt-summary-tile">
-    <div class="olt-summary-icon" style="background:#eff6ff;">
-      <i class="fa-solid fa-server text-primary"></i>
-    </div>
-    <div>
-      <div class="val text-primary">{{ olts|length }}</div>
-      <div class="lbl">Total OLTs</div>
-    </div>
+<div class="summary-bar">
+  <div class="summary-tile">
+    <div class="st-icon" style="background:#eff6ff;"><i class="fa-solid fa-server text-primary"></i></div>
+    <div><div class="val text-primary">{{ olts|length }}</div><div class="lbl">Total OLTs</div></div>
   </div>
-  <div class="olt-summary-tile">
-    <div class="olt-summary-icon" style="background:#f0fdf4;">
-      <i class="fa-solid fa-circle-check text-success"></i>
-    </div>
-    <div>
-      <div class="val text-success">
-        {% with cnt=0 %}{% for o in olts %}{% if o.status == 'online' %}{% with cnt=cnt|add:1 %}{% endwith %}{% endif %}{% endfor %}
-        {{ olts|length }}{% endwith %}
-      </div>
-      <div class="lbl">Online</div>
-    </div>
+  <div class="summary-tile">
+    <div class="st-icon" style="background:#f0fdf4;"><i class="fa-solid fa-circle-check text-success"></i></div>
+    <div><div class="val text-success" id="cnt-online">—</div><div class="lbl">Online</div></div>
   </div>
-  <div class="olt-summary-tile">
-    <div class="olt-summary-icon" style="background:#fef2f2;">
-      <i class="fa-solid fa-circle-xmark text-danger"></i>
-    </div>
-    <div>
-      <div class="val text-danger" id="stat-offline">—</div>
-      <div class="lbl">Offline</div>
-    </div>
+  <div class="summary-tile">
+    <div class="st-icon" style="background:#fff1f2;"><i class="fa-solid fa-circle-xmark text-danger"></i></div>
+    <div><div class="val text-danger" id="cnt-offline">—</div><div class="lbl">Offline</div></div>
   </div>
-  <div class="olt-summary-tile">
-    <div class="olt-summary-icon" style="background:#fafafa;">
-      <i class="fa-solid fa-network-wired" style="color:#6366f1;"></i>
-    </div>
-    <div>
-      <div class="val" style="color:#6366f1;" id="stat-total-onts">—</div>
-      <div class="lbl">Total ONTs</div>
-    </div>
+  <div class="summary-tile">
+    <div class="st-icon" style="background:#f5f3ff;"><i class="fa-solid fa-network-wired" style="color:#6366f1;"></i></div>
+    <div><div class="val" style="color:#6366f1;" id="cnt-onts">—</div><div class="lbl">Total ONTs</div></div>
   </div>
-  <div class="olt-summary-tile">
-    <div class="olt-summary-icon" style="background:#f0fdf4;">
-      <i class="fa-solid fa-wifi" style="color:#10b981;"></i>
-    </div>
-    <div>
-      <div class="val" style="color:#10b981;" id="stat-online-onts">—</div>
-      <div class="lbl">ONTs Online</div>
-    </div>
+  <div class="summary-tile">
+    <div class="st-icon" style="background:#f0fdf4;"><i class="fa-solid fa-wifi" style="color:#10b981;"></i></div>
+    <div><div class="val" style="color:#10b981;" id="cnt-onts-online">—</div><div class="lbl">ONTs Online</div></div>
   </div>
 </div>
 
-<!-- ── Filter Bar ── -->
+<!-- ── Filter Row ── -->
 <form method="get" class="filter-row">
-  <div class="input-group input-group-sm" style="max-width:280px;">
+  <div class="input-group input-group-sm" style="max-width:260px;">
     <span class="input-group-text bg-white border-end-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
     <input type="text" name="q" value="{{ search }}" class="form-control border-start-0 ps-0" placeholder="Name, IP or location…">
   </div>
-  <select name="vendor" class="form-select form-select-sm" style="max-width:140px;">
+  <select name="vendor" class="form-select form-select-sm" style="max-width:130px;">
     <option value="">All Vendors</option>
     <option value="ZTE"    {% if vendor_filter == 'ZTE'    %}selected{% endif %}>ZTE</option>
     <option value="HUAWEI" {% if vendor_filter == 'HUAWEI' %}selected{% endif %}>Huawei</option>
   </select>
-  <select name="status" class="form-select form-select-sm" style="max-width:140px;">
+  <select name="status" class="form-select form-select-sm" style="max-width:130px;">
     <option value="">All Status</option>
     <option value="online"  {% if status_filter == 'online'  %}selected{% endif %}>Online</option>
     <option value="offline" {% if status_filter == 'offline' %}selected{% endif %}>Offline</option>
     <option value="warning" {% if status_filter == 'warning' %}selected{% endif %}>Warning</option>
   </select>
-  <button type="submit" class="btn btn-sm btn-primary px-4">Filter</button>
+  <button type="submit" class="btn btn-sm btn-primary px-4">Search</button>
   {% if search or vendor_filter or status_filter %}
   <a href="{% url 'olt_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
   {% endif %}
   <span class="ms-auto text-muted" style="font-size:0.78rem;">{{ olts|length }} result{{ olts|length|pluralize }}</span>
 </form>
 
-<!-- ── OLT Grid ── -->
-<div class="row g-4">
+<!-- ── Column Header ── -->
+{% if olts %}
+<div class="olt-col-header">
+  <div style="width:46px; flex-shrink:0;"></div>
+  <div style="flex:1;">Device</div>
+  <div style="min-width:120px;">ONT Status</div>
+  <div style="display:flex;gap:6px;">
+    <div style="min-width:58px;text-align:center;">Total</div>
+    <div style="min-width:58px;text-align:center;">Online</div>
+    <div style="min-width:58px;text-align:center;">Offline</div>
+  </div>
+  <div style="min-width:80px;"></div>
+  <div style="min-width:110px;"></div>
+</div>
+{% endif %}
+
+<!-- ── OLT List ── -->
+<div class="olt-list">
 {% for olt in olts %}
-<div class="col-lg-4 col-md-6">
-  <div class="olt-card-wrap">
+<div class="olt-row s-{{ olt.status }}"
+     data-status="{{ olt.status }}"
+     data-total="{{ olt.ont_count }}"
+     data-online="{{ olt.online_ont_count }}"
+     data-offline="{{ olt.offline_ont_count }}">
 
-    <!-- Status strip -->
-    <div class="olt-card-strip strip-{{ olt.status }}"></div>
+  <!-- Icon -->
+  <div class="olt-icon s-{{ olt.status }}">
+    <i class="fa-solid fa-server"></i>
+  </div>
 
-    <div class="olt-card-body">
-
-      <!-- Top: name + status -->
-      <div class="olt-card-top">
-        <div style="min-width:0;">
-          <div>
-            <span class="olt-vendor-badge {{ olt.vendor_badge_class }}">{{ olt.vendor }}</span>
-            <span class="text-muted" style="font-size:0.7rem; margin-left:4px;">{{ olt.model }}</span>
-          </div>
-          <div class="olt-name">{{ olt.name }}</div>
-          {% if olt.location %}
-          <div class="olt-location"><i class="fa-solid fa-location-dot me-1"></i>{{ olt.location }}</div>
-          {% endif %}
-        </div>
-        <div class="olt-status-pill sp-{{ olt.status }} ms-2">
-          <span class="pulse-dot pd-{{ olt.status }}"></span>
-          {{ olt.get_status_display }}
-        </div>
-      </div>
-
-      <!-- ONT stats -->
-      <div class="ont-stat-row">
-        <div class="ont-stat">
-          <div class="v text-primary">{{ olt.ont_count }}</div>
-          <div class="l">Total</div>
-        </div>
-        <div class="ont-stat">
-          <div class="v text-success">{{ olt.online_ont_count }}</div>
-          <div class="l">Online</div>
-        </div>
-        <div class="ont-stat">
-          <div class="v text-danger">{{ olt.offline_ont_count }}</div>
-          <div class="l">Offline</div>
-        </div>
-      </div>
-
-      <!-- ONT online bar -->
-      {% if olt.ont_count %}
-      <div style="margin-bottom:14px;">
-        <div style="background:#f1f5f9; border-radius:6px; height:7px; overflow:hidden;">
-          <div style="height:100%; border-radius:6px; background:linear-gradient(90deg,#22c55e,#4ade80);
-                      width:{% widthratio olt.online_ont_count olt.ont_count 100 %}%"></div>
-        </div>
-        <div style="font-size:0.67rem; color:#94a3b8; margin-top:3px; text-align:right;">
-          {% widthratio olt.online_ont_count olt.ont_count 100 %}% ONTs online
-        </div>
-      </div>
-      {% endif %}
-
-      <!-- Performance bars -->
-      {% if olt.status != 'offline' and olt.status != 'unknown' %}
-      <div class="perf-row">
-        <div class="perf-item">
-          <span class="perf-label">CPU</span>
-          <div class="perf-bar-track">
-            <div class="perf-bar-fill {% if olt.cpu_usage > 80 %}bg-danger{% elif olt.cpu_usage > 60 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ olt.cpu_usage }}%"></div>
-          </div>
-          <span class="perf-val">{{ olt.cpu_usage|floatformat:0 }}%</span>
-        </div>
-        <div class="perf-item">
-          <span class="perf-label">RAM</span>
-          <div class="perf-bar-track">
-            <div class="perf-bar-fill {% if olt.memory_usage > 85 %}bg-danger{% elif olt.memory_usage > 65 %}bg-warning{% else %}bg-info{% endif %}" style="width:{{ olt.memory_usage }}%"></div>
-          </div>
-          <span class="perf-val">{{ olt.memory_usage|floatformat:0 }}%</span>
-        </div>
-        <div class="perf-item">
-          <span class="perf-label">Temp</span>
-          <div class="perf-bar-track">
-            <div class="perf-bar-fill {% if olt.temperature > 55 %}bg-danger{% elif olt.temperature > 45 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ olt.temperature }}%"></div>
-          </div>
-          <span class="perf-val {% if olt.temperature > 55 %}text-danger{% elif olt.temperature > 45 %}text-warning{% else %}text-success{% endif %}">{{ olt.temperature|floatformat:0 }}°</span>
-        </div>
-      </div>
-      {% endif %}
-
-      <!-- IP + Uptime meta -->
-      <div class="olt-card-meta">
-        <span><i class="fa-solid fa-ethernet me-1 opacity-50"></i><code style="font-size:0.73rem;">{{ olt.ip_address }}</code></span>
-        <span><i class="fa-solid fa-clock me-1 opacity-50"></i>{{ olt.uptime_formatted }}</span>
-      </div>
-
-      <!-- Actions -->
-      <div class="olt-card-actions">
-        <a href="{% url 'olt_detail' olt.pk %}" class="btn btn-primary btn-sm flex-grow-1">
-          <i class="fa-solid fa-eye me-1"></i>View Details
-        </a>
-        {% if request.user.profile.is_operator %}
-        <a href="{% url 'olt_edit' olt.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
-          <i class="fa-solid fa-pen"></i>
-        </a>
-        {% endif %}
-        {% if request.user.profile.is_admin %}
-        <a href="{% url 'olt_delete' olt.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
-          <i class="fa-solid fa-trash"></i>
-        </a>
-        {% endif %}
-      </div>
-
+  <!-- Name + meta -->
+  <div class="olt-name-block">
+    <div class="olt-name">{{ olt.name }}</div>
+    <div class="olt-meta">
+      <span><code>{{ olt.ip_address }}</code></span>
+      <span><span class="badge {{ olt.vendor_badge_class }}" style="font-size:0.62rem;">{{ olt.vendor }}</span> {{ olt.model }}</span>
+      {% if olt.location %}<span><i class="fa-solid fa-location-dot me-1"></i>{{ olt.location }}</span>{% endif %}
     </div>
   </div>
-</div>
 
-{% empty %}
-<div class="col-12">
-  <div class="olt-empty">
-    <i class="fa-solid fa-server"></i>
-    <h5 class="text-dark fw-bold">No OLTs Found</h5>
-    <p class="mb-3">{% if search or vendor_filter or status_filter %}No OLTs match your current filters.{% else %}Get started by adding your first OLT device.{% endif %}</p>
+  <!-- ONT dot bar -->
+  <div class="ont-dot-bar"
+       data-on="{{ olt.online_ont_count }}"
+       data-off="{{ olt.offline_ont_count }}"
+       data-total="{{ olt.ont_count }}">
+  </div>
+
+  <!-- Stats -->
+  <div class="olt-stats">
+    <div class="olt-stat">
+      <div class="sv text-primary">{{ olt.ont_count }}</div>
+      <div class="sl">Total</div>
+    </div>
+    <div class="olt-stat">
+      <div class="sv text-success">{{ olt.online_ont_count }}</div>
+      <div class="sl">Online</div>
+    </div>
+    <div class="olt-stat">
+      <div class="sv text-danger">{{ olt.offline_ont_count }}</div>
+      <div class="sl">Offline</div>
+    </div>
+  </div>
+
+  <!-- Status badge -->
+  <span class="olt-status-badge sb-{{ olt.status }}">
+    <span class="pulse {% if olt.status == 'online' %}pulse-on{% elif olt.status == 'offline' %}pulse-off{% else %}pulse-warn{% endif %}"></span>
+    {{ olt.get_status_display }}
+  </span>
+
+  <!-- Actions -->
+  <div class="olt-actions">
+    <a href="{% url 'olt_detail' olt.pk %}" class="btn btn-sm btn-primary">
+      <i class="fa-solid fa-eye me-1"></i>View
+    </a>
     {% if request.user.profile.is_operator %}
-    <a href="{% url 'olt_create' %}" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>Add OLT</a>
+    <a href="{% url 'olt_edit' olt.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
+      <i class="fa-solid fa-pen"></i>
+    </a>
     {% endif %}
-    {% if search or vendor_filter or status_filter %}
-    <a href="{% url 'olt_list' %}" class="btn btn-outline-secondary ms-2">Clear Filters</a>
+    {% if request.user.profile.is_admin %}
+    <a href="{% url 'olt_delete' olt.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+      <i class="fa-solid fa-trash"></i>
+    </a>
     {% endif %}
   </div>
+
+</div>
+{% empty %}
+<div class="olt-empty">
+  <i class="fa-solid fa-server"></i>
+  <h5 class="text-dark fw-bold">No OLTs Found</h5>
+  <p class="mb-3">{% if search or vendor_filter or status_filter %}No OLTs match your filters.{% else %}Add your first OLT to get started.{% endif %}</p>
+  {% if request.user.profile.is_operator %}
+  <a href="{% url 'olt_create' %}" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>Add OLT</a>
+  {% endif %}
+  {% if search or vendor_filter or status_filter %}
+  <a href="{% url 'olt_list' %}" class="btn btn-outline-secondary ms-2">Clear Filters</a>
+  {% endif %}
 </div>
 {% endfor %}
 </div>
 
-<script>
-// Compute summary stats from card data
-document.addEventListener('DOMContentLoaded', () => {
-  const cards = document.querySelectorAll('.olt-card-wrap');
-  let offline = 0, totalOnts = 0, onlineOnts = 0;
-  cards.forEach(card => {
-    const strip = card.querySelector('.olt-card-strip');
-    if (strip && strip.classList.contains('strip-offline')) offline++;
-    const stats = card.querySelectorAll('.ont-stat .v');
-    if (stats.length >= 3) {
-      totalOnts  += parseInt(stats[0].textContent) || 0;
-      onlineOnts += parseInt(stats[1].textContent) || 0;
-    }
-  });
-  const se = document.getElementById('stat-offline');
-  const st = document.getElementById('stat-total-onts');
-  const so = document.getElementById('stat-online-onts');
-  if (se) se.textContent = offline;
-  if (st) st.textContent = totalOnts;
-  if (so) so.textContent = onlineOnts;
+{% endblock %}
 
-  // Fix the "online OLTs" tile (Django template limitation workaround)
-  const onlineCount = cards.length - offline;
-  const onlineTile = document.querySelector('.olt-summary-tile:nth-child(2) .val');
-  if (onlineTile) onlineTile.textContent = onlineCount;
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  let cntOnline = 0, cntOffline = 0, totalOnts = 0, onlineOnts = 0;
+
+  /* Build dot bars + compute summary counts */
+  document.querySelectorAll('.olt-row').forEach(row => {
+    const status  = row.dataset.status;
+    const total   = parseInt(row.dataset.total)  || 0;
+    const online  = parseInt(row.dataset.online) || 0;
+    const offline = parseInt(row.dataset.offline)|| 0;
+
+    if (status === 'online')  cntOnline++;
+    else if (status === 'offline') cntOffline++;
+    totalOnts  += total;
+    onlineOnts += online;
+
+    /* Dot bar */
+    const bar = row.querySelector('.ont-dot-bar');
+    if (!bar) return;
+
+    const cap     = Math.min(total || 20, 20); // max 20 dots
+    const scale   = cap / (total || 1);
+    const onDots  = Math.round(online  * scale);
+    const offDots = Math.round(offline * scale);
+    const freeDots= cap - onDots - offDots;
+
+    let html = '';
+    for (let i = 0; i < onDots;   i++) html += '<span class="ont-dot dot-on"></span>';
+    for (let i = 0; i < offDots;  i++) html += '<span class="ont-dot dot-off"></span>';
+    for (let i = 0; i < freeDots; i++) html += '<span class="ont-dot dot-free"></span>';
+    bar.innerHTML = html;
+  });
+
+  /* Update summary tiles */
+  document.getElementById('cnt-online').textContent      = cntOnline;
+  document.getElementById('cnt-offline').textContent     = cntOffline;
+  document.getElementById('cnt-onts').textContent        = totalOnts;
+  document.getElementById('cnt-onts-online').textContent = onlineOnts;
 });
 </script>
-
 {% endblock %}
