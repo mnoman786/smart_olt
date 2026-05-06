@@ -125,6 +125,29 @@ class ZTEParser:
             'distance_m': int(_f(r'Distance\(m\)[:\s]+(\d+)')),
         }
 
+    @staticmethod
+    def parse_uncfg_list(output: str) -> list[dict]:
+        """
+        Parse 'show gpon onu uncfg gpon-olt_X/X/X' output.
+        Returns list of {serial_number, vendor_info}.
+
+        Sample output:
+          gpon-olt_1/1/1:
+            Index   SN              VendorID  ONU-Type
+            -       ZTEG12345678    ZTEG      ZTE-F660
+        """
+        results = []
+        for line in output.splitlines():
+            # Match lines like: -  ZTEG12345678  ZTEG  ZTE-F660
+            m = re.match(r'\s*-\s+([A-F0-9a-z]{12,16})\s+(\S+)\s+(\S+)', line)
+            if m:
+                serial, vendor_id, onu_type = m.groups()
+                results.append({
+                    'serial_number': serial.upper(),
+                    'vendor_info': f'{vendor_id} {onu_type}'.strip(),
+                })
+        return results
+
 
 class HuaweiParser:
     """Parses CLI output from Huawei MA56xx / MA58xx OLTs."""
@@ -196,6 +219,28 @@ class HuaweiParser:
             'distance_m': 0,
         }
 
+    @staticmethod
+    def parse_uncfg_list(output: str) -> list[dict]:
+        """
+        Parse 'display ont autofind X X' output.
+        Returns list of {serial_number, vendor_info}.
+
+        Sample output:
+          Port   ONT   SN                Password  Loid  Checkcode  Ontlinestatus
+          0/1    -     4857544312345678  -         -     -          online
+        """
+        results = []
+        for line in output.splitlines():
+            # Match lines with a hex serial number (16 chars for Huawei OMCI format)
+            m = re.match(r'\s*[\d/]+\s+-\s+([A-Fa-f0-9]{16})\s+', line)
+            if m:
+                serial = m.group(1).upper()
+                results.append({
+                    'serial_number': serial,
+                    'vendor_info': 'Huawei Auto-Found',
+                })
+        return results
+
 
 # ── Vendor command maps ───────────────────────────────────────────────────────
 
@@ -209,6 +254,8 @@ _VENDOR_COMMANDS = {
         'optical':     'show gpon onu optical-info interface gpon-onu_{board}/{port_b}/{port}:{ont_id}',
         'reboot':      'interface gpon-onu_{board}/{port_b}/{port}:{ont_id}\nreboot\nexit',
         'factory_reset': 'interface gpon-onu_{board}/{port_b}/{port}:{ont_id}\nfactory-reset\nexit',
+        # Auto-discovery: ONTs connected but not yet registered
+        'uncfg_list':  'show gpon onu uncfg gpon-olt_{board}/{port_b}/{port}',
     },
     'HUAWEI': {
         'version':     'display version',
@@ -219,6 +266,8 @@ _VENDOR_COMMANDS = {
         'optical':     'display ont optical-info {board} {port} {ont_id}',
         'reboot':      'interface gpon {board}/{port}\nont reset {ont_id}\nquit',
         'factory_reset': 'interface gpon {board}/{port}\nont factory-reset {ont_id}\nquit',
+        # Auto-discovery: ONTs connected but not yet registered
+        'uncfg_list':  'display ont autofind {board} {port}',
     },
 }
 
@@ -468,6 +517,59 @@ def send_ont_command_sync(ont, command: str) -> dict:
     except Exception as exc:
         logger.error('send_ont_command ONT %s cmd=%s: %s', ont.serial_number, command, exc)
         return {'success': False, 'message': str(exc), 'output': ''}
+
+
+def discover_unregistered_onts_sync(olt, pon_port) -> list[dict]:
+    """
+    Query the OLT for ONTs that are physically connected on a PON port
+    but not yet registered/provisioned. Saves results to DiscoveredONT table
+    (excluding serials already in the ONT table). Returns list of dicts.
+    """
+    from onts.models import ONT
+    from .models import DiscoveredONT
+
+    if DEMO_MODE:
+        # Generate 2-4 fake unregistered serials not already in the DB
+        existing = set(ONT.objects.filter(pon_port=pon_port).values_list('serial_number', flat=True))
+        fake_prefix = 'ZTEG' if olt.vendor == 'ZTE' else '48575443'
+        candidates = [
+            f'{fake_prefix}{random.randint(10000000, 99999999):08d}' for _ in range(4)
+        ]
+        found = [
+            {'serial_number': s, 'vendor_info': f'{"ZTE-F660" if olt.vendor == "ZTE" else "Huawei EG8145V5"} (demo)'}
+            for s in candidates if s not in existing
+        ][:3]
+    else:
+        board = pon_port.board
+        port_b = 1
+        port = pon_port.port
+        cmds = _VENDOR_COMMANDS[olt.vendor]
+        parser = _PARSERS[olt.vendor]
+
+        try:
+            with _ssh_connection(olt) as conn:
+                cmd = _fmt(cmds['uncfg_list'], board=board, port_b=port_b, port=port)
+                output = conn.send_command(cmd, read_timeout=SSH_TIMEOUT)
+                found = parser.parse_uncfg_list(output)
+        except Exception as exc:
+            logger.error('discover_unregistered_onts OLT %s port %s/%s: %s',
+                         olt.ip_address, board, port, exc)
+            return []
+
+    # Filter out serials already registered as ONTs
+    registered = set(ONT.objects.filter(pon_port=pon_port).values_list('serial_number', flat=True))
+    unregistered = [f for f in found if f['serial_number'] not in registered]
+
+    # Persist to DiscoveredONT — upsert by serial+port
+    DiscoveredONT.objects.filter(pon_port=pon_port).delete()
+    for entry in unregistered:
+        DiscoveredONT.objects.update_or_create(
+            pon_port=pon_port,
+            serial_number=entry['serial_number'],
+            defaults={'olt': olt, 'vendor_info': entry.get('vendor_info', '')},
+        )
+
+    return unregistered
 
 
 def poll_all_ont_signals_sync(olt) -> int:

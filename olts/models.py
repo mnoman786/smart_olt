@@ -103,3 +103,22 @@ class PONPort(models.Model):
     class Meta:
         ordering = ['olt', 'board', 'port']
         unique_together = ['olt', 'board', 'port']
+
+
+class DiscoveredONT(models.Model):
+    """
+    Unregistered ONTs detected on a PON port via SSH auto-discovery.
+    Row is deleted once the ONT is registered (an ONT record is created).
+    """
+    olt = models.ForeignKey(OLT, on_delete=models.CASCADE, related_name='discovered_onts')
+    pon_port = models.ForeignKey(PONPort, on_delete=models.CASCADE, related_name='discovered_onts')
+    serial_number = models.CharField(max_length=50)
+    vendor_info = models.CharField(max_length=100, blank=True)
+    discovered_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['pon_port', 'serial_number']
+        unique_together = ['pon_port', 'serial_number']
+
+    def __str__(self):
+        return f"Discovered {self.serial_number} on {self.pon_port}"

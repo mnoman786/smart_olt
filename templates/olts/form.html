@@ -6,96 +6,438 @@
 <li class="breadcrumb-item active">{{ action }}</li>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+.form-page { max-width: 860px; margin: 0 auto; }
+
+/* Section card */
+.form-section {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.form-section-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fafbfd;
+}
+.form-section-icon {
+  width: 36px; height: 36px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.95rem; flex-shrink: 0;
+}
+.form-section-title { font-size: 0.95rem; font-weight: 700; color: #1e293b; margin: 0; }
+.form-section-sub   { font-size: 0.75rem; color: #94a3b8; margin: 0; }
+.form-section-body  { padding: 22px; }
+
+/* Vendor selector */
+.vendor-selector { display: flex; gap: 12px; }
+.vendor-btn {
+  flex: 1; border: 2px solid #e2e8f0; border-radius: 10px;
+  padding: 14px 10px; text-align: center; cursor: pointer;
+  transition: all 0.18s; background: #f8fafc;
+}
+.vendor-btn:hover { border-color: #93c5fd; background: #eff6ff; }
+.vendor-btn.selected-zte    { border-color: #ef4444; background: #fff1f2; }
+.vendor-btn.selected-huawei { border-color: #3b82f6; background: #eff6ff; }
+.vendor-btn .vendor-logo { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 4px; }
+.vendor-btn .vendor-name { font-size: 0.72rem; font-weight: 600; color: #475569; }
+.vendor-zte-logo    { color: #ef4444; }
+.vendor-huawei-logo { color: #3b82f6; }
+
+/* Model chips */
+.model-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.model-chip {
+  border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 4px 12px;
+  font-size: 0.75rem; font-weight: 600; cursor: pointer; background: #f8fafc; color: #475569;
+  transition: all 0.15s;
+}
+.model-chip:hover { border-color: #93c5fd; color: #1d4ed8; background: #eff6ff; }
+.model-chip.active { border-color: #3b82f6; background: #dbeafe; color: #1d4ed8; }
+
+/* Input with icon */
+.input-icon-wrap { position: relative; }
+.input-icon-wrap .input-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: #94a3b8; font-size: 0.82rem; pointer-events: none;
+}
+.input-icon-wrap .form-control { padding-left: 34px; }
+.input-icon-wrap .input-icon-right {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  cursor: pointer; color: #94a3b8; font-size: 0.82rem;
+}
+
+/* Connection test */
+.conn-test-row {
+  display: flex; align-items: flex-end; gap: 10px;
+}
+.conn-test-row .form-group { flex: 1; }
+#connTestResult {
+  font-size: 0.8rem; padding: 8px 12px; border-radius: 8px; margin-top: 10px;
+  display: none;
+}
+
+/* Label style */
+.form-label { font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 5px; }
+.field-hint  { font-size: 0.7rem; color: #94a3b8; margin-top: 3px; }
+
+/* Save bar */
+.form-save-bar {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px 22px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
-  <h4 class="page-title"><i class="fa-solid fa-server me-2 text-primary"></i>{{ action }}</h4>
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-server me-2 text-primary"></i>{{ action }}</h4>
+    <p class="page-subtitle">Configure connection details so SmartOLT can communicate with your device</p>
+  </div>
 </div>
-<div class="row justify-content-center">
-  <div class="col-lg-8">
-    <div class="card card-styled">
-      <div class="card-body">
-        <form method="post">
-          {% csrf_token %}
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label fw-medium">OLT Name <span class="text-danger">*</span></label>
-              {{ form.name }}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Vendor <span class="text-danger">*</span></label>
-              {{ form.vendor }}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Model <span class="text-danger">*</span></label>
-              {{ form.model }}
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-medium">IP Address <span class="text-danger">*</span></label>
-              {{ form.ip_address }}
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-medium">Telnet Port</label>
-              {{ form.telnet_port }}
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-medium">SSH Port</label>
-              {{ form.ssh_port }}
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-medium">Username</label>
-              {{ form.username }}
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-medium">Password</label>
-              {{ form.password }}
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-medium">SNMP Community</label>
-              {{ form.snmp_community }}
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-medium">Firmware Version</label>
-              {{ form.firmware_version }}
-            </div>
-            <div class="col-12">
-              <label class="form-label fw-medium">Location</label>
-              {{ form.location }}
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-medium">Latitude</label>
-              {{ form.latitude }}
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-medium">Longitude</label>
-              {{ form.longitude }}
-            </div>
-            <div class="col-12">
-              <label class="form-label fw-medium">Description</label>
-              {{ form.description }}
-            </div>
-            <div class="col-12">
-              <div class="form-check">
-                {{ form.is_active }}
-                <label class="form-check-label fw-medium">Active</label>
-              </div>
-            </div>
-            {% if form.errors %}
-            <div class="col-12">
-              <div class="alert alert-danger">
-                {% for field, errors in form.errors.items %}
-                {% for error in errors %}<div><i class="fa-solid fa-circle-xmark me-1"></i>{{ field }}: {{ error }}</div>{% endfor %}
-                {% endfor %}
-              </div>
-            </div>
-            {% endif %}
-            <div class="col-12 d-flex gap-2">
-              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Save OLT</button>
-              <a href="{% if olt %}{% url 'olt_detail' olt.pk %}{% else %}{% url 'olt_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
-            </div>
-          </div>
-        </form>
+
+<div class="form-page">
+<form method="post" id="oltForm">
+{% csrf_token %}
+
+<!-- ── 1. Device ── -->
+<div class="form-section">
+  <div class="form-section-header">
+    <div class="form-section-icon" style="background:#eff6ff;">
+      <i class="fa-solid fa-server text-primary"></i>
+    </div>
+    <div>
+      <div class="form-section-title">Device Information</div>
+      <div class="form-section-sub">Vendor, hardware model and a friendly name</div>
+    </div>
+  </div>
+  <div class="form-section-body">
+
+    <!-- Vendor selector -->
+    <div class="mb-4">
+      <label class="form-label">Vendor <span class="text-danger">*</span></label>
+      <div class="vendor-selector">
+        <div class="vendor-btn {% if form.vendor.value == 'ZTE' %}selected-zte{% endif %}"
+             onclick="selectVendor('ZTE', this)" id="vendor-zte">
+          <div class="vendor-logo vendor-zte-logo">ZTE</div>
+          <div class="vendor-name">ZTE</div>
+        </div>
+        <div class="vendor-btn {% if form.vendor.value == 'HUAWEI' %}selected-huawei{% endif %}"
+             onclick="selectVendor('HUAWEI', this)" id="vendor-huawei">
+          <div class="vendor-logo vendor-huawei-logo">华为</div>
+          <div class="vendor-name">Huawei</div>
+        </div>
+      </div>
+      <div style="display:none;">{{ form.vendor }}</div>
+    </div>
+
+    <!-- Model quick-select -->
+    <div class="mb-4" id="modelSection">
+      <label class="form-label">Hardware Model <span class="text-danger">*</span></label>
+      <div class="input-icon-wrap mb-2">
+        <i class="input-icon fa-solid fa-microchip"></i>
+        {{ form.model }}
+      </div>
+      <div id="zteModels" class="model-chips" style="display:none;">
+        <span class="model-chip" onclick="setModel('ZTE C300')">C300</span>
+        <span class="model-chip" onclick="setModel('ZTE C320')">C320</span>
+        <span class="model-chip" onclick="setModel('ZTE C600')">C600</span>
+        <span class="model-chip" onclick="setModel('ZTE C650')">C650</span>
+        <span class="model-chip" onclick="setModel('ZTE F660')">F660</span>
+      </div>
+      <div id="huaweiModels" class="model-chips" style="display:none;">
+        <span class="model-chip" onclick="setModel('Huawei MA5608T')">MA5608T</span>
+        <span class="model-chip" onclick="setModel('Huawei MA5683T')">MA5683T</span>
+        <span class="model-chip" onclick="setModel('Huawei MA5800')">MA5800</span>
+        <span class="model-chip" onclick="setModel('Huawei MA5801')">MA5801</span>
+        <span class="model-chip" onclick="setModel('Huawei MA5600T')">MA5600T</span>
+      </div>
+    </div>
+
+    <!-- Name -->
+    <div>
+      <label class="form-label">OLT Name <span class="text-danger">*</span></label>
+      <div class="input-icon-wrap">
+        <i class="input-icon fa-solid fa-tag"></i>
+        {{ form.name }}
+      </div>
+      <div class="field-hint">A friendly name to identify this device (e.g. "Main-Office-OLT")</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 2. Connection ── -->
+<div class="form-section">
+  <div class="form-section-header">
+    <div class="form-section-icon" style="background:#f0fdf4;">
+      <i class="fa-solid fa-ethernet" style="color:#16a34a;"></i>
+    </div>
+    <div>
+      <div class="form-section-title">Connection &amp; Authentication</div>
+      <div class="form-section-sub">Network address, ports and login credentials</div>
+    </div>
+  </div>
+  <div class="form-section-body">
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <label class="form-label">IP Address <span class="text-danger">*</span></label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-network-wired"></i>
+          {{ form.ip_address }}
+        </div>
+        <div class="field-hint">Public IP or private IP if using VPN tunnel</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Telnet Port</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-terminal"></i>
+          {{ form.telnet_port }}
+        </div>
+        <div class="field-hint">Default: 23</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">SSH Port</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-lock"></i>
+          {{ form.ssh_port }}
+        </div>
+        <div class="field-hint">Default: 22</div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div style="border-top:1px solid #f1f5f9; margin: 4px 0 18px;"></div>
+
+    <!-- Credentials row -->
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <label class="form-label"><i class="fa-solid fa-user me-1 text-muted"></i>Username</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-user"></i>
+          {{ form.username }}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label"><i class="fa-solid fa-key me-1 text-muted"></i>Password</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-lock"></i>
+          <input type="password" name="password" id="id_password"
+                 value="{{ form.password.value|default:'' }}"
+                 class="form-control" placeholder="Enter password">
+          <i class="input-icon-right fa-solid fa-eye" id="pwToggle" onclick="togglePw()"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Test connection -->
+    <div style="background:#f8fafc; border:1.5px dashed #e2e8f0; border-radius:10px; padding:14px 16px;">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <div style="font-size:0.82rem; font-weight:600; color:#374151;"><i class="fa-solid fa-plug me-1 text-primary"></i>Test Connection</div>
+          <div class="field-hint">Verify SmartOLT can reach this device before saving</div>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="testConnBtn" onclick="testConn()">
+          <i class="fa-solid fa-plug me-1"></i>Test Now
+        </button>
+      </div>
+      <div id="connTestResult"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 4. Advanced ── -->
+<div class="form-section">
+  <div class="form-section-header" style="cursor:pointer;" onclick="toggleAdvanced()">
+    <div class="form-section-icon" style="background:#fff7ed;">
+      <i class="fa-solid fa-sliders" style="color:#ea580c;"></i>
+    </div>
+    <div style="flex:1;">
+      <div class="form-section-title">Advanced &amp; Optional</div>
+      <div class="form-section-sub">SNMP, firmware version, location coordinates</div>
+    </div>
+    <i class="fa-solid fa-chevron-down text-muted" id="advChevron" style="transition:transform 0.2s;"></i>
+  </div>
+  <div id="advancedBody" class="form-section-body" style="display:none;">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">SNMP Community</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-broadcast-tower"></i>
+          {{ form.snmp_community }}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Firmware Version</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-code-branch"></i>
+          {{ form.firmware_version }}
+        </div>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Location</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-location-dot"></i>
+          {{ form.location }}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Latitude</label>
+        {{ form.latitude }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Longitude</label>
+        {{ form.longitude }}
+      </div>
+      <div class="col-12">
+        <label class="form-label">Notes</label>
+        {{ form.description }}
+      </div>
+      <div class="col-12">
+        <div class="form-check">
+          {{ form.is_active }}
+          <label class="form-check-label fw-medium" style="font-size:0.85rem;">Active (visible and monitored)</label>
+        </div>
       </div>
     </div>
   </div>
 </div>
+
+<!-- ── Errors ── -->
+{% if form.errors %}
+<div class="alert alert-danger d-flex gap-2 align-items-start">
+  <i class="fa-solid fa-circle-xmark mt-1"></i>
+  <div>
+    <strong>Please fix the following errors:</strong>
+    {% for field, errors in form.errors.items %}
+      {% for error in errors %}<div>{{ field }}: {{ error }}</div>{% endfor %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Save Bar ── -->
+<div class="form-save-bar">
+  <div style="font-size:0.8rem; color:#94a3b8;">
+    <i class="fa-solid fa-circle-info me-1"></i>
+    Fields marked <span class="text-danger fw-bold">*</span> are required
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% if olt %}{% url 'olt_detail' olt.pk %}{% else %}{% url 'olt_list' %}{% endif %}"
+       class="btn btn-outline-secondary">Cancel</a>
+    <button type="submit" class="btn btn-primary px-4">
+      <i class="fa-solid fa-floppy-disk me-1"></i>Save OLT
+    </button>
+  </div>
+</div>
+
+</form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = '{{ csrf_token }}';
+
+/* ── Vendor select ── */
+function selectVendor(vendor, el) {
+  document.querySelectorAll('.vendor-btn').forEach(b => b.className = 'vendor-btn');
+  el.classList.add(vendor === 'ZTE' ? 'selected-zte' : 'selected-huawei');
+  document.getElementById('id_vendor').value = vendor;
+  document.getElementById('zteModels').style.display    = vendor === 'ZTE'    ? 'flex' : 'none';
+  document.getElementById('huaweiModels').style.display = vendor === 'HUAWEI' ? 'flex' : 'none';
+  // Update active chip
+  document.querySelectorAll('.model-chip').forEach(c => c.classList.remove('active'));
+  const cur = document.getElementById('id_model').value;
+  document.querySelectorAll('.model-chip').forEach(c => {
+    if (c.textContent.trim() === cur || c.getAttribute('onclick')?.includes(cur)) c.classList.add('active');
+  });
+}
+
+function setModel(val) {
+  document.getElementById('id_model').value = val;
+  document.querySelectorAll('.model-chip').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+/* ── Password toggle ── */
+function togglePw() {
+  const inp = document.getElementById('id_password');
+  const ico = document.getElementById('pwToggle');
+  if (inp.type === 'password') { inp.type = 'text';     ico.className = 'input-icon-right fa-solid fa-eye-slash'; }
+  else                          { inp.type = 'password'; ico.className = 'input-icon-right fa-solid fa-eye'; }
+}
+
+/* ── Advanced toggle ── */
+function toggleAdvanced() {
+  const body = document.getElementById('advancedBody');
+  const chev = document.getElementById('advChevron');
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    chev.style.transform = 'rotate(180deg)';
+  } else {
+    body.style.display = 'none';
+    chev.style.transform = 'rotate(0deg)';
+  }
+}
+
+/* ── Test connection ── */
+{% if olt %}
+function testConn() {
+  const btn = document.getElementById('testConnBtn');
+  const res = document.getElementById('connTestResult');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-plug fa-spin me-1"></i>Testing…';
+  res.style.display = 'none';
+  fetch(`/olts/{{ olt.pk }}/test-connection/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json()).then(d => {
+      res.style.display = 'block';
+      if (d.connected) {
+        res.className = 'alert alert-success py-2 mb-0 mt-2';
+        res.innerHTML = `<i class="fa-solid fa-circle-check me-1"></i><strong>Connected!</strong> ${d.vendor || ''} — firmware: <code>${d.firmware || 'N/A'}</code> — latency: ${d.latency_ms} ms`;
+      } else {
+        res.className = 'alert alert-danger py-2 mb-0 mt-2';
+        res.innerHTML = `<i class="fa-solid fa-circle-xmark me-1"></i><strong>Failed:</strong> ${d.error}`;
+      }
+    }).finally(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-plug me-1"></i>Test Now';
+    });
+}
+{% else %}
+function testConn() {
+  const res = document.getElementById('connTestResult');
+  res.style.display = 'block';
+  res.className = 'alert alert-warning py-2 mb-0 mt-2';
+  res.innerHTML = '<i class="fa-solid fa-triangle-exclamation me-1"></i>Save the OLT first, then test the connection from the detail page.';
+}
+{% endif %}
+
+/* ── Init on load ── */
+document.addEventListener('DOMContentLoaded', () => {
+  const vendor = document.getElementById('id_vendor').value;
+  if (vendor === 'ZTE')    { document.getElementById('zteModels').style.display    = 'flex'; document.getElementById('vendor-zte').classList.add('selected-zte'); }
+  if (vendor === 'HUAWEI') { document.getElementById('huaweiModels').style.display = 'flex'; document.getElementById('vendor-huawei').classList.add('selected-huawei'); }
+
+  // Auto-open advanced if any optional field has a value (edit mode)
+  const adv = ['{{ form.snmp_community.value }}','{{ form.firmware_version.value }}','{{ form.location.value }}'];
+  if (adv.some(v => v && v !== 'public' && v !== '')) toggleAdvanced();
+
+  // Highlight current model chip
+  const cur = document.getElementById('id_model').value;
+  document.querySelectorAll('.model-chip').forEach(c => {
+    if (c.getAttribute('onclick')?.includes(`'${cur}'`)) c.classList.add('active');
+  });
+});
+</script>
 {% endblock %}

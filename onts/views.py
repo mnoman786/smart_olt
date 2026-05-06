@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.http import JsonResponse
 from .models import ONT, ONTProfile
 from .forms import ONTForm, ONTProfileForm
@@ -55,11 +55,27 @@ def ont_create(request):
         form = ONTForm(request.POST)
         if form.is_valid():
             ont = form.save()
-            messages.success(request, f'ONT "{ont.name}" created successfully.')
+            # Remove from discovered list now that it's registered
+            from olts.models import DiscoveredONT
+            DiscoveredONT.objects.filter(serial_number=ont.serial_number).delete()
+            messages.success(request, f'ONT "{ont.name}" registered successfully.')
             return redirect('ont_detail', pk=ont.pk)
     else:
-        form = ONTForm()
-    return render(request, 'onts/form.html', {'form': form, 'action': 'Add ONT'})
+        # Pre-fill from query params (coming from "Register This ONT" button)
+        initial = {}
+        if request.GET.get('serial'):
+            initial['serial_number'] = request.GET['serial']
+        if request.GET.get('olt'):
+            initial['olt'] = request.GET['olt']
+        if request.GET.get('pon_port'):
+            initial['pon_port'] = request.GET['pon_port']
+        form = ONTForm(initial=initial)
+
+    return render(request, 'onts/form.html', {
+        'form': form,
+        'action': 'Add ONT',
+        'prefill_serial': request.GET.get('serial', ''),
+    })
 
 
 @login_required
@@ -156,5 +172,46 @@ def ont_traffic_data(request, pk):
 
 @login_required
 def profile_list(request):
-    profiles = ONTProfile.objects.all()
+    profiles = ONTProfile.objects.annotate(ont_count=Count('ont'))
     return render(request, 'onts/profiles.html', {'profiles': profiles})
+
+
+@login_required
+@operator_required
+def profile_create(request):
+    if request.method == 'POST':
+        form = ONTProfileForm(request.POST)
+        if form.is_valid():
+            profile = form.save()
+            messages.success(request, f'Profile "{profile.name}" created.')
+            return redirect('ont_profiles')
+    else:
+        form = ONTProfileForm()
+    return render(request, 'onts/profile_form.html', {'form': form, 'action': 'Add Profile'})
+
+
+@login_required
+@operator_required
+def profile_edit(request, pk):
+    profile = get_object_or_404(ONTProfile, pk=pk)
+    if request.method == 'POST':
+        form = ONTProfileForm(request.POST, instance=profile)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Profile "{profile.name}" updated.')
+            return redirect('ont_profiles')
+    else:
+        form = ONTProfileForm(instance=profile)
+    return render(request, 'onts/profile_form.html', {'form': form, 'profile': profile, 'action': 'Edit Profile'})
+
+
+@login_required
+@admin_required
+def profile_delete(request, pk):
+    profile = get_object_or_404(ONTProfile, pk=pk)
+    if request.method == 'POST':
+        name = profile.name
+        profile.delete()
+        messages.success(request, f'Profile "{name}" deleted.')
+        return redirect('ont_profiles')
+    return render(request, 'onts/profile_confirm_delete.html', {'profile': profile})

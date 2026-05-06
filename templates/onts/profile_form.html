@@ -1,0 +1,323 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'ont_list' %}">ONTs</a></li>
+<li class="breadcrumb-item"><a href="{% url 'ont_profiles' %}">Profiles</a></li>
+<li class="breadcrumb-item active">{{ action }}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.form-card {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.form-card-header {
+  padding: 16px 22px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.form-card-header .fch-icon {
+  width: 36px; height: 36px;
+  border-radius: 9px;
+  background: #eff6ff;
+  display: flex; align-items: center; justify-content: center;
+  color: #3b82f6;
+}
+.form-card-header .fch-title { font-size: 0.9rem; font-weight: 700; color: #1e293b; margin: 0; }
+.form-card-body { padding: 22px; }
+.form-label { font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 5px; }
+.form-text { font-size: 0.72rem; color: #94a3b8; margin-top: 3px; }
+
+/* Speed slider visual */
+.speed-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.speed-display input[type=range] { flex: 1; }
+.speed-val {
+  min-width: 70px;
+  text-align: right;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Protocol chips */
+.proto-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.proto-chip {
+  padding: 7px 16px;
+  border-radius: 20px;
+  border: 1.5px solid #e2e8f0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #64748b;
+  background: #f8fafc;
+  transition: all 0.15s;
+  user-select: none;
+}
+.proto-chip:hover { border-color: #3b82f6; color: #1d4ed8; }
+.proto-chip.selected { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
+
+/* Vendor tiles */
+.vendor-tiles { display: flex; gap: 10px; flex-wrap: wrap; }
+.vendor-tile {
+  flex: 1; min-width: 100px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  background: #f8fafc;
+}
+.vendor-tile:hover { border-color: #94a3b8; }
+.vendor-tile.selected-zte    { border-color: #dc2626; background: #fff0f0; }
+.vendor-tile.selected-huawei { border-color: #2563eb; background: #eff6ff; }
+.vendor-tile.selected-all    { border-color: #16a34a; background: #f0fdf4; }
+.vendor-tile .vt-icon { font-size: 1.2rem; margin-bottom: 4px; }
+.vendor-tile .vt-name { font-size: 0.72rem; font-weight: 700; }
+
+.save-bar {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+  <div style="width:44px;height:44px;border-radius:11px;background:#eff6ff;display:flex;align-items:center;justify-content:center;">
+    <i class="fa-solid fa-sliders" style="color:#3b82f6;font-size:1.1rem;"></i>
+  </div>
+  <div>
+    <h4 class="page-title mb-0">{{ action }}</h4>
+    <p class="page-subtitle mb-0">Define a reusable bandwidth and service template</p>
+  </div>
+</div>
+
+<form method="post" style="max-width: 680px;">
+  {% csrf_token %}
+
+  <!-- Hidden selects (driven by chips/tiles) -->
+  <select name="vendor"   id="id_vendor"   style="display:none;">
+    {% for val, label in form.vendor.field.choices %}
+    <option value="{{ val }}" {% if form.vendor.value == val %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <select name="protocol" id="id_protocol" style="display:none;">
+    {% for val, label in form.protocol.field.choices %}
+    <option value="{{ val }}" {% if form.protocol.value == val %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+
+  <!-- ① Profile Identity -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <div class="fch-icon"><i class="fa-solid fa-tag"></i></div>
+      <div class="fch-title">Profile Identity</div>
+    </div>
+    <div class="form-card-body">
+
+      <!-- Vendor -->
+      <div class="mb-4">
+        <label class="form-label">Vendor Compatibility</label>
+        <div class="vendor-tiles" id="vendorTiles">
+          <div class="vendor-tile" data-val="ZTE" onclick="pickVendor('ZTE', this)">
+            <div class="vt-icon" style="color:#dc2626;"><i class="fa-solid fa-server"></i></div>
+            <div class="vt-name" style="color:#dc2626;">ZTE</div>
+          </div>
+          <div class="vendor-tile" data-val="HUAWEI" onclick="pickVendor('HUAWEI', this)">
+            <div class="vt-icon" style="color:#2563eb;"><i class="fa-solid fa-server"></i></div>
+            <div class="vt-name" style="color:#2563eb;">Huawei</div>
+          </div>
+          <div class="vendor-tile" data-val="ALL" onclick="pickVendor('ALL', this)">
+            <div class="vt-icon" style="color:#16a34a;"><i class="fa-solid fa-globe"></i></div>
+            <div class="vt-name" style="color:#16a34a;">All Vendors</div>
+          </div>
+        </div>
+        {% if form.vendor.errors %}
+        <div class="text-danger mt-1" style="font-size:0.78rem;">{{ form.vendor.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <!-- Profile name -->
+      <div class="mb-0">
+        <label class="form-label" for="{{ form.name.id_for_label }}">
+          Profile Name <span class="text-danger">*</span>
+        </label>
+        {{ form.name }}
+        <div class="form-text">E.g. "Home-100M", "Business-500M", "IPTV-Bridge"</div>
+        {% if form.name.errors %}
+        <div class="text-danger mt-1" style="font-size:0.78rem;">{{ form.name.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ② Bandwidth -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <div class="fch-icon"><i class="fa-solid fa-gauge-high"></i></div>
+      <div class="fch-title">Bandwidth Limits</div>
+    </div>
+    <div class="form-card-body">
+
+      <div class="mb-4">
+        <label class="form-label">Download Speed (Mbps)</label>
+        <div class="speed-display">
+          <input type="range" class="form-range" min="1" max="10000" step="1"
+                 id="dlRange" value="{{ form.download_speed.value|default:100 }}"
+                 oninput="updateSpeed('dl', this.value)">
+          <div class="speed-val"><span id="dlVal">{{ form.download_speed.value|default:100 }}</span> Mbps</div>
+        </div>
+        {{ form.download_speed }}
+        {% if form.download_speed.errors %}
+        <div class="text-danger mt-1" style="font-size:0.78rem;">{{ form.download_speed.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="form-label">Upload Speed (Mbps)</label>
+        <div class="speed-display">
+          <input type="range" class="form-range" min="1" max="10000" step="1"
+                 id="ulRange" value="{{ form.upload_speed.value|default:50 }}"
+                 oninput="updateSpeed('ul', this.value)">
+          <div class="speed-val"><span id="ulVal">{{ form.upload_speed.value|default:50 }}</span> Mbps</div>
+        </div>
+        {{ form.upload_speed }}
+        {% if form.upload_speed.errors %}
+        <div class="text-danger mt-1" style="font-size:0.78rem;">{{ form.upload_speed.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ③ Service Settings -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <div class="fch-icon"><i class="fa-solid fa-network-wired"></i></div>
+      <div class="fch-title">Service Settings</div>
+    </div>
+    <div class="form-card-body">
+
+      <!-- Protocol chips -->
+      <div class="mb-4">
+        <label class="form-label">IP Protocol <span class="text-danger">*</span></label>
+        <div class="proto-chips" id="protoChips">
+          {% for val, label in form.protocol.field.choices %}
+          <div class="proto-chip" data-val="{{ val }}" onclick="pickProto('{{ val }}', this)">{{ label }}</div>
+          {% endfor %}
+        </div>
+        <div class="form-text mt-2">
+          DHCP — auto IP from router &nbsp;·&nbsp; PPPoE — username/password dial-up &nbsp;·&nbsp; Static — fixed IP &nbsp;·&nbsp; Bridge — pass-through
+        </div>
+        {% if form.protocol.errors %}
+        <div class="text-danger mt-1" style="font-size:0.78rem;">{{ form.protocol.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <!-- VLAN -->
+      <div class="mb-4">
+        <label class="form-label" for="{{ form.vlan_id.id_for_label }}">VLAN ID</label>
+        {{ form.vlan_id }}
+        <div class="form-text">Optional — leave blank if VLAN is set per-ONT or not used</div>
+        {% if form.vlan_id.errors %}
+        <div class="text-danger mt-1" style="font-size:0.78rem;">{{ form.vlan_id.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label class="form-label" for="{{ form.description.id_for_label }}">Description</label>
+        {{ form.description }}
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Save bar -->
+  <div class="save-bar">
+    <a href="{% url 'ont_profiles' %}" class="btn btn-outline-secondary">
+      <i class="fa-solid fa-arrow-left me-2"></i>Cancel
+    </a>
+    <button type="submit" class="btn btn-primary">
+      <i class="fa-solid fa-floppy-disk me-2"></i>{{ action }}
+    </button>
+  </div>
+
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ── Sync hidden range inputs with number inputs ── */
+function updateSpeed(type, val) {
+  const numInput = document.getElementById(type === 'dl' ? 'id_download_speed' : 'id_upload_speed');
+  const label    = document.getElementById(type === 'dl' ? 'dlVal' : 'ulVal');
+  numInput.value = val;
+  label.textContent = val;
+}
+
+/* Keep number inputs in sync with range on direct edit */
+document.getElementById('id_download_speed').addEventListener('input', function() {
+  document.getElementById('dlRange').value = this.value;
+  document.getElementById('dlVal').textContent = this.value;
+});
+document.getElementById('id_upload_speed').addEventListener('input', function() {
+  document.getElementById('ulRange').value = this.value;
+  document.getElementById('ulVal').textContent = this.value;
+});
+
+/* ── Vendor tiles ── */
+const VENDOR_CLASSES = { ZTE: 'selected-zte', HUAWEI: 'selected-huawei', ALL: 'selected-all' };
+function pickVendor(val, el) {
+  document.querySelectorAll('#vendorTiles .vendor-tile').forEach(t => {
+    t.classList.remove('selected-zte', 'selected-huawei', 'selected-all');
+  });
+  el.classList.add(VENDOR_CLASSES[val]);
+  document.getElementById('id_vendor').value = val;
+}
+
+/* ── Protocol chips ── */
+function pickProto(val, el) {
+  document.querySelectorAll('#protoChips .proto-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('id_protocol').value = val;
+}
+
+/* ── Init on load ── */
+(function init() {
+  const vendor   = document.getElementById('id_vendor').value   || 'ALL';
+  const protocol = document.getElementById('id_protocol').value || 'dhcp';
+
+  const vt = document.querySelector(`#vendorTiles [data-val="${vendor}"]`);
+  if (vt) vt.classList.add(VENDOR_CLASSES[vendor]);
+
+  const pc = document.querySelector(`#protoChips [data-val="${protocol}"]`);
+  if (pc) pc.classList.add('selected');
+
+  // Hide number inputs (range sliders handle it visually)
+  document.getElementById('id_download_speed').style.display = 'none';
+  document.getElementById('id_upload_speed').style.display = 'none';
+})();
+</script>
+{% endblock %}

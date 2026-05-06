@@ -11,4 +11,6 @@ urlpatterns = [
     path('<int:pk>/test-connection/', views.olt_test_connection, name='olt_test_connection'),
     path('<int:pk>/metrics-data/', views.olt_metrics_data, name='olt_metrics_data'),
     path('task/<str:task_id>/status/', views.olt_task_status, name='olt_task_status'),
+    path('<int:olt_pk>/pon/<int:pon_pk>/', views.pon_detail, name='pon_detail'),
+    path('<int:olt_pk>/pon/<int:pon_pk>/scan/', views.scan_pon_port, name='scan_pon_port'),
 ]

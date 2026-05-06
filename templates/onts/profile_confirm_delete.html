@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Delete Profile{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'ont_list' %}">ONTs</a></li>
+<li class="breadcrumb-item"><a href="{% url 'ont_profiles' %}">Profiles</a></li>
+<li class="breadcrumb-item active">Delete</li>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 0 auto;">
+  <div style="background:#fff;border:1.5px solid #fca5a5;border-radius:14px;overflow:hidden;">
+
+    <div style="background:linear-gradient(90deg,#fff1f2,#ffe4e6);padding:20px 24px;border-bottom:1px solid #fecaca;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="width:44px;height:44px;border-radius:11px;background:#fee2e2;display:flex;align-items:center;justify-content:center;">
+          <i class="fa-solid fa-triangle-exclamation" style="color:#dc2626;font-size:1.1rem;"></i>
+        </div>
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:#991b1b;">Delete Profile</div>
+          <div style="font-size:0.78rem;color:#b91c1c;">This action cannot be undone</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:24px;">
+      <p style="font-size:0.9rem;color:#374151;margin-bottom:6px;">
+        You are about to permanently delete the profile:
+      </p>
+      <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:1rem;font-weight:700;color:#1e293b;">{{ profile.name }}</div>
+        <div style="font-size:0.75rem;color:#94a3b8;margin-top:4px;">
+          {{ profile.download_speed }}/{{ profile.upload_speed }} Mbps &nbsp;·&nbsp; {{ profile.get_protocol_display }} &nbsp;·&nbsp; {{ profile.get_vendor_display }}
+        </div>
+      </div>
+
+      {% with count=profile.ont_set.count %}
+      {% if count > 0 %}
+      <div class="alert alert-warning py-2 mb-4" style="font-size:0.82rem;">
+        <i class="fa-solid fa-circle-exclamation me-2"></i>
+        <strong>{{ count }} ONT{{ count|pluralize }}</strong> currently use this profile. They will have their profile set to none.
+      </div>
+      {% endif %}
+      {% endwith %}
+
+      <form method="post" class="d-flex gap-3">
+        {% csrf_token %}
+        <a href="{% url 'ont_profiles' %}" class="btn btn-outline-secondary flex-fill">
+          <i class="fa-solid fa-arrow-left me-2"></i>Cancel
+        </a>
+        <button type="submit" class="btn btn-danger flex-fill">
+          <i class="fa-solid fa-trash me-2"></i>Yes, Delete
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

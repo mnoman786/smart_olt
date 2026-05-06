@@ -1,0 +1,665 @@
+{% extends 'base.html' %}
+{% block title %}PON B{{ pon_port.board }}/P{{ pon_port.port }} — {{ olt.name }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'olt_list' %}">OLTs</a></li>
+<li class="breadcrumb-item"><a href="{% url 'olt_detail' olt.pk %}">{{ olt.name }}</a></li>
+<li class="breadcrumb-item active">PON B{{ pon_port.board }}/P{{ pon_port.port }}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── PON Hero Banner ── */
+.pon-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 60%, #1d4ed8 100%);
+  border-radius: 14px;
+  padding: 28px 28px 22px;
+  margin-bottom: 24px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.pon-hero::after {
+  content: '';
+  position: absolute;
+  right: -60px; top: -60px;
+  width: 220px; height: 220px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.pon-hero::before {
+  content: '';
+  position: absolute;
+  right: 60px; bottom: -80px;
+  width: 180px; height: 180px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.hero-title { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+.hero-sub   { font-size: 0.82rem; opacity: 0.65; margin-top: 4px; }
+
+.hero-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.hero-stat {
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 10px 18px;
+  min-width: 90px;
+  text-align: center;
+}
+.hero-stat .v { font-size: 1.7rem; font-weight: 800; line-height: 1; }
+.hero-stat .l { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.65; margin-top: 2px; }
+
+.hero-cap-bar { background: rgba(255,255,255,0.18); border-radius: 6px; height: 8px; overflow: hidden; margin-top: 16px; }
+.hero-cap-fill { height: 100%; border-radius: 6px; transition: width .6s; }
+
+/* ── Filter Bar ── */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.filter-pill {
+  border: none;
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: #f1f5f9;
+  color: #475569;
+}
+.filter-pill:hover { background: #e2e8f0; }
+.filter-pill.active { font-weight: 700; }
+.filter-pill.fp-all      { }
+.filter-pill.fp-all.active     { background: #1e40af; color: #fff; }
+.filter-pill.fp-online.active  { background: #16a34a; color: #fff; }
+.filter-pill.fp-offline.active { background: #dc2626; color: #fff; }
+.filter-pill.fp-alarm.active   { background: #d97706; color: #fff; }
+.filter-pill.fp-free.active    { background: #64748b; color: #fff; }
+
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.75rem; color: #64748b; align-items: center; }
+.legend span { display: flex; align-items: center; gap: 5px; }
+.leg-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+/* ── ONT Grid ── */
+.ont-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 14px;
+}
+
+/* ── ONT Card ── */
+.ont-card-wrap { display: block; text-decoration: none !important; }
+.ont-card-wrap:hover .ont-card { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.10); }
+
+.ont-card {
+  border-radius: 12px;
+  border: 1.5px solid transparent;
+  padding: 14px 14px 12px;
+  position: relative;
+  transition: transform 0.15s, box-shadow 0.15s;
+  height: 100%;
+}
+
+/* Status variants */
+.ont-card.s-online      { background: #f0fdf4; border-color: #86efac; }
+.ont-card.s-offline     { background: #fff1f2; border-color: #fca5a5; }
+.ont-card.s-los         { background: #fffbeb; border-color: #fcd34d; }
+.ont-card.s-pf          { background: #fff7ed; border-color: #fdba74; }
+.ont-card.s-fibercut    { background: #fff7ed; border-color: #fdba74; }
+.ont-card.s-degraded    { background: #faf5ff; border-color: #c4b5fd; }
+.ont-card.s-provisioning{ background: #eff6ff; border-color: #93c5fd; }
+.ont-card.s-free        { background: #f8fafc; border-color: #e2e8f0; }
+
+/* Status top strip */
+.ont-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 12px 12px 0 0;
+}
+.ont-card.s-online::before      { background: #22c55e; }
+.ont-card.s-offline::before     { background: #ef4444; }
+.ont-card.s-los::before         { background: #f59e0b; }
+.ont-card.s-pf::before          { background: #f97316; }
+.ont-card.s-fibercut::before    { background: #f97316; }
+.ont-card.s-degraded::before    { background: #a78bfa; }
+.ont-card.s-provisioning::before{ background: #60a5fa; }
+.ont-card.s-free::before        { background: #e2e8f0; }
+
+.ont-id-tag {
+  position: absolute; top: 8px; right: 10px;
+  font-size: 0.62rem; font-weight: 700;
+  color: #94a3b8;
+  background: rgba(0,0,0,0.05);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.ont-status-row {
+  display: flex; align-items: center; gap: 5px;
+  margin-bottom: 8px;
+  margin-top: 4px;
+}
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.sd-online      { background: #22c55e; }
+.sd-offline     { background: #ef4444; }
+.sd-los         { background: #f59e0b; }
+.sd-pf          { background: #f97316; }
+.sd-fibercut    { background: #f97316; }
+.sd-degraded    { background: #a78bfa; }
+.sd-provisioning{ background: #60a5fa; }
+.sd-free        { background: #cbd5e1; }
+
+.ont-status-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.ont-name   { font-size: 0.82rem; font-weight: 700; color: #1e293b; margin-bottom: 3px; line-height: 1.2; }
+.ont-serial { font-size: 0.67rem; font-family: monospace; color: #94a3b8; margin-bottom: 8px; }
+
+.sig-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 0.67rem; font-weight: 600;
+  padding: 2px 7px; border-radius: 20px;
+}
+.sig-excellent { background: #dcfce7; color: #15803d; }
+.sig-good      { background: #d1fae5; color: #065f46; }
+.sig-fair      { background: #fef9c3; color: #92400e; }
+.sig-poor      { background: #fee2e2; color: #b91c1c; }
+.sig-none      { background: #f1f5f9; color: #94a3b8; }
+
+.ont-ip { font-size: 0.68rem; color: #94a3b8; margin-top: 4px; font-family: monospace; }
+
+/* Free slot */
+.ont-free-body {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 80px; color: #cbd5e1;
+  font-size: 0.72rem;
+  text-align: center;
+}
+.ont-free-body i { font-size: 1.3rem; margin-bottom: 4px; display: block; }
+
+/* ── Tab Navigation ── */
+.pon-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 24px;
+}
+.pon-tab {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  border-radius: 6px 6px 0 0;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pon-tab:hover { color: #1e293b; background: #f8fafc; }
+.pon-tab.active { color: #1d4ed8; border-bottom-color: #1d4ed8; background: #eff6ff; }
+.pon-tab .tab-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: #e2e8f0;
+  color: #475569;
+}
+.pon-tab.active .tab-badge { background: #bfdbfe; color: #1d4ed8; }
+.pon-tab.tab-discovered .tab-badge { background: #fef3c7; color: #b45309; }
+.pon-tab.tab-discovered.active { color: #d97706; border-bottom-color: #d97706; background: #fffbeb; }
+.pon-tab.tab-discovered.active .tab-badge { background: #fde68a; color: #92400e; }
+
+/* Tab pane */
+.tab-pane-pon { display: none; }
+.tab-pane-pon.active { display: block; }
+
+/* Discovered card */
+.disc-card {
+  border: 1.5px solid #fcd34d;
+  border-radius: 10px;
+  background: #fffbeb;
+  padding: 14px 16px;
+}
+.disc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Hero Banner ── -->
+<div class="pon-hero">
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div style="flex: 1; min-width: 200px;">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <span style="background:rgba(255,255,255,0.15); border-radius:6px; padding:3px 10px; font-size:0.72rem; font-weight:600; letter-spacing:0.04em;">{{ pon_port.technology }}</span>
+        <span style="font-size:0.72rem; opacity:0.6;">{{ pon_port.port_label }}</span>
+      </div>
+      <h3 class="hero-title">
+        Board {{ pon_port.board }} &nbsp;/&nbsp; Port {{ pon_port.port }}
+      </h3>
+      <p class="hero-sub">
+        <i class="fa-solid fa-server me-1"></i>{{ olt.name }}
+        {% if olt.location %}&nbsp;·&nbsp;<i class="fa-solid fa-location-dot me-1"></i>{{ olt.location }}{% endif %}
+      </p>
+    </div>
+    <div>
+      <span class="badge {% if pon_port.status == 'up' %}bg-success{% elif pon_port.status == 'down' %}bg-danger{% else %}bg-warning text-dark{% endif %}" style="font-size:0.8rem; padding:6px 14px;">
+        <i class="fa-solid fa-circle me-1" style="font-size:0.55rem;"></i>
+        {{ pon_port.get_status_display }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="v text-success">{{ online_count }}</div>
+      <div class="l">Online</div>
+    </div>
+    <div class="hero-stat">
+      <div class="v text-danger">{{ offline_count }}</div>
+      <div class="l">Offline</div>
+    </div>
+    <div class="hero-stat">
+      <div class="v" style="color:#fbbf24;">{{ provisioning_count }}</div>
+      <div class="l">Provisioning</div>
+    </div>
+    <div class="hero-stat">
+      <div class="v">{{ registered_count }}</div>
+      <div class="l">Registered</div>
+    </div>
+    <div class="hero-stat">
+      <div class="v" style="color:#94a3b8;">{{ unregistered_count }}</div>
+      <div class="l">Free Slots</div>
+    </div>
+  </div>
+
+  <!-- Capacity bar -->
+  <div style="margin-top: 16px;">
+    <div style="display:flex; justify-content:space-between; font-size:0.72rem; opacity:0.7; margin-bottom:6px;">
+      <span>Port Utilisation</span>
+      <span>{{ registered_count }} / {{ pon_port.max_onts }} ONTs</span>
+    </div>
+    <div class="hero-cap-bar">
+      <div class="hero-cap-fill {% if registered_count > 100 %}bg-danger{% elif registered_count > 80 %}bg-warning{% else %}bg-success{% endif %}"
+           style="width: {% widthratio registered_count pon_port.max_onts 100 %}%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Tab Navigation ── -->
+<div class="pon-tabs">
+  <button class="pon-tab active" id="tabRegistered" onclick="switchTab('registered')">
+    <i class="fa-solid fa-network-wired"></i>
+    Registered ONTs
+    <span class="tab-badge">{{ registered_count }}</span>
+  </button>
+  <button class="pon-tab tab-discovered" id="tabDiscovered" onclick="switchTab('discovered')">
+    <i class="fa-solid fa-satellite-dish"></i>
+    Unregistered
+    <span class="tab-badge" id="discTabBadge">{{ discovered_onts|length }}</span>
+  </button>
+</div>
+
+<!-- ── Tab: Registered ONTs ── -->
+<div class="tab-pane-pon active" id="paneRegistered">
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <div class="legend">
+      <span><span class="leg-dot" style="background:#22c55e;"></span> Online</span>
+      <span><span class="leg-dot" style="background:#ef4444;"></span> Offline</span>
+      <span><span class="leg-dot" style="background:#f59e0b;"></span> Alarm</span>
+      <span><span class="leg-dot" style="background:#60a5fa;"></span> Provisioning</span>
+    </div>
+    <div class="filter-pills">
+      <button class="filter-pill fp-all active"  onclick="filterCards('all',    this)">All</button>
+      <button class="filter-pill fp-online"       onclick="filterCards('online', this)">
+        <span class="leg-dot" style="background:#22c55e; margin-right:3px;"></span>Online
+      </button>
+      <button class="filter-pill fp-offline"      onclick="filterCards('offline',this)">
+        <span class="leg-dot" style="background:#ef4444; margin-right:3px;"></span>Offline
+      </button>
+      <button class="filter-pill fp-alarm"        onclick="filterCards('alarm',  this)">
+        <span class="leg-dot" style="background:#f59e0b; margin-right:3px;"></span>Alarm
+      </button>
+    </div>
+  </div>
+
+  <!-- ONT Grid -->
+  <div class="ont-grid" id="ontGrid">
+
+  {% for slot in slots %}
+    {% if slot.registered %}
+      {% with ont=slot.ont %}
+
+        {# --- ONLINE --- #}
+        {% if ont.status == 'online' %}
+        <a href="{% url 'ont_detail' ont.pk %}" class="ont-card-wrap" data-filter="online">
+          <div class="ont-card s-online">
+            <span class="ont-id-tag">#{{ slot.slot_id }}</span>
+            <div class="ont-status-row">
+              <span class="status-dot sd-online"></span>
+              <span class="ont-status-label" style="color:#16a34a;">Online</span>
+            </div>
+            <div class="ont-name">{{ ont.name }}</div>
+            <div class="ont-serial">{{ ont.serial_number }}</div>
+            {% if ont.rx_power %}
+              {% if ont.rx_power >= -20 %}<span class="sig-badge sig-excellent"><i class="fa-solid fa-signal"></i> {{ ont.rx_power }} dBm</span>
+              {% elif ont.rx_power >= -23 %}<span class="sig-badge sig-good"><i class="fa-solid fa-signal"></i> {{ ont.rx_power }} dBm</span>
+              {% elif ont.rx_power >= -27 %}<span class="sig-badge sig-fair"><i class="fa-solid fa-signal"></i> {{ ont.rx_power }} dBm</span>
+              {% else %}<span class="sig-badge sig-poor"><i class="fa-solid fa-signal"></i> {{ ont.rx_power }} dBm</span>
+              {% endif %}
+            {% endif %}
+            {% if ont.ip_address %}<div class="ont-ip">{{ ont.ip_address }}</div>{% endif %}
+          </div>
+        </a>
+
+        {# --- OFFLINE --- #}
+        {% elif ont.status == 'offline' %}
+        <a href="{% url 'ont_detail' ont.pk %}" class="ont-card-wrap" data-filter="offline">
+          <div class="ont-card s-offline">
+            <span class="ont-id-tag">#{{ slot.slot_id }}</span>
+            <div class="ont-status-row">
+              <span class="status-dot sd-offline"></span>
+              <span class="ont-status-label" style="color:#dc2626;">Offline</span>
+            </div>
+            <div class="ont-name">{{ ont.name }}</div>
+            <div class="ont-serial">{{ ont.serial_number }}</div>
+            <span class="sig-badge sig-none">No Signal</span>
+          </div>
+        </a>
+
+        {# --- LOS --- #}
+        {% elif ont.status == 'los' %}
+        <a href="{% url 'ont_detail' ont.pk %}" class="ont-card-wrap" data-filter="alarm">
+          <div class="ont-card s-los">
+            <span class="ont-id-tag">#{{ slot.slot_id }}</span>
+            <div class="ont-status-row">
+              <span class="status-dot sd-los"></span>
+              <span class="ont-status-label" style="color:#b45309;">Loss of Signal</span>
+            </div>
+            <div class="ont-name">{{ ont.name }}</div>
+            <div class="ont-serial">{{ ont.serial_number }}</div>
+            <span class="sig-badge sig-fair"><i class="fa-solid fa-triangle-exclamation"></i> LOS</span>
+          </div>
+        </a>
+
+        {# --- POWER FAILURE --- #}
+        {% elif ont.status == 'power_failure' %}
+        <a href="{% url 'ont_detail' ont.pk %}" class="ont-card-wrap" data-filter="alarm">
+          <div class="ont-card s-pf">
+            <span class="ont-id-tag">#{{ slot.slot_id }}</span>
+            <div class="ont-status-row">
+              <span class="status-dot sd-pf"></span>
+              <span class="ont-status-label" style="color:#c2410c;">Power Failure</span>
+            </div>
+            <div class="ont-name">{{ ont.name }}</div>
+            <div class="ont-serial">{{ ont.serial_number }}</div>
+            <span class="sig-badge sig-poor"><i class="fa-solid fa-bolt"></i> Power Out</span>
+          </div>
+        </a>
+
+        {# --- FIBER CUT --- #}
+        {% elif ont.status == 'fiber_cut' %}
+        <a href="{% url 'ont_detail' ont.pk %}" class="ont-card-wrap" data-filter="alarm">
+          <div class="ont-card s-fibercut">
+            <span class="ont-id-tag">#{{ slot.slot_id }}</span>
+            <div class="ont-status-row">
+              <span class="status-dot sd-fibercut"></span>
+              <span class="ont-status-label" style="color:#c2410c;">Fiber Cut</span>
+            </div>
+            <div class="ont-name">{{ ont.name }}</div>
+            <div class="ont-serial">{{ ont.serial_number }}</div>
+            <span class="sig-badge sig-poor"><i class="fa-solid fa-scissors"></i> Fiber Cut</span>
+          </div>
+        </a>
+
+        {# --- DEGRADED --- #}
+        {% elif ont.status == 'degraded' %}
+        <a href="{% url 'ont_detail' ont.pk %}" class="ont-card-wrap" data-filter="alarm">
+          <div class="ont-card s-degraded">
+            <span class="ont-id-tag">#{{ slot.slot_id }}</span>
+            <div class="ont-status-row">
+              <span class="status-dot sd-degraded"></span>
+              <span class="ont-status-label" style="color:#7c3aed;">Degraded</span>
+            </div>
+            <div class="ont-name">{{ ont.name }}</div>
+            <div class="ont-serial">{{ ont.serial_number }}</div>
+            {% if ont.rx_power %}<span class="sig-badge sig-poor">{{ ont.rx_power }} dBm</span>{% endif %}
+          </div>
+        </a>
+
+        {# --- PROVISIONING --- #}
+        {% elif ont.status == 'provisioning' %}
+        <a href="{% url 'ont_detail' ont.pk %}" class="ont-card-wrap" data-filter="offline">
+          <div class="ont-card s-provisioning">
+            <span class="ont-id-tag">#{{ slot.slot_id }}</span>
+            <div class="ont-status-row">
+              <span class="status-dot sd-provisioning"></span>
+              <span class="ont-status-label" style="color:#1d4ed8;">Provisioning</span>
+            </div>
+            <div class="ont-name">{{ ont.name }}</div>
+            <div class="ont-serial">{{ ont.serial_number }}</div>
+            <span class="sig-badge" style="background:#dbeafe; color:#1d4ed8;"><i class="fa-solid fa-rotate fa-spin"></i> Setting up</span>
+          </div>
+        </a>
+
+        {# --- OTHER --- #}
+        {% else %}
+        <a href="{% url 'ont_detail' ont.pk %}" class="ont-card-wrap" data-filter="offline">
+          <div class="ont-card s-offline">
+            <span class="ont-id-tag">#{{ slot.slot_id }}</span>
+            <div class="ont-status-row">
+              <span class="status-dot sd-offline"></span>
+              <span class="ont-status-label" style="color:#dc2626;">{{ ont.get_status_display }}</span>
+            </div>
+            <div class="ont-name">{{ ont.name }}</div>
+            <div class="ont-serial">{{ ont.serial_number }}</div>
+          </div>
+        </a>
+        {% endif %}
+
+      {% endwith %}
+    {% endif %}
+  {% empty %}
+    <div style="grid-column: 1/-1;" class="text-center py-5 text-muted">
+      <i class="fa-solid fa-inbox fa-3x mb-3 d-block opacity-20"></i>
+      No ONTs registered on this PON port yet.
+    </div>
+  {% endfor %}
+
+  </div><!-- /.ont-grid -->
+</div><!-- /#paneRegistered -->
+
+<!-- ── Tab: Unregistered / Discovered ONTs ── -->
+<div class="tab-pane-pon" id="paneDiscovered">
+
+  <!-- Header row -->
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
+    <div>
+      <div style="font-size:0.9rem; font-weight:700; color:#1e293b;">
+        <i class="fa-solid fa-satellite-dish me-2" style="color:#d97706;"></i>
+        Physically connected but not yet registered
+      </div>
+      <div style="font-size:0.75rem; color:#64748b; margin-top:3px;">
+        Click <strong>Scan for New ONTs</strong> to detect devices on this port, then register them to provide internet service.
+      </div>
+    </div>
+    {% if request.user.profile.is_operator %}
+    <button class="btn btn-warning" id="scanBtn" onclick="scanPort()">
+      <i class="fa-solid fa-radar me-2"></i>Scan for New ONTs
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- Scan status bar -->
+  <div id="scanStatus" style="display:none;" class="alert alert-info py-2 mb-3">
+    <i class="fa-solid fa-circle-notch fa-spin me-2"></i>Scanning port — sending SSH discovery command to OLT…
+  </div>
+
+  <!-- Discovered list -->
+  <div id="discoveredList">
+    {% if discovered_onts %}
+    <div class="disc-grid">
+      {% for d in discovered_onts %}
+      <div class="disc-card">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 3px #fef3c7;flex-shrink:0;"></span>
+          <span style="font-size:0.72rem;font-weight:700;color:#b45309;">Waiting for Registration</span>
+        </div>
+        <div style="font-family:monospace;font-size:0.88rem;font-weight:700;color:#1e293b;margin-bottom:3px;">{{ d.serial_number }}</div>
+        {% if d.vendor_info %}
+        <div style="font-size:0.7rem;color:#94a3b8;margin-bottom:8px;">{{ d.vendor_info }}</div>
+        {% endif %}
+        <div style="font-size:0.67rem;color:#b45309;margin-bottom:12px;">
+          <i class="fa-solid fa-clock me-1"></i>Detected {{ d.discovered_at|timesince }} ago
+        </div>
+        <a href="{% url 'ont_create' %}?pon_port={{ pon_port.pk }}&serial={{ d.serial_number }}&olt={{ olt.pk }}"
+           class="btn btn-warning btn-sm w-100" style="font-size:0.78rem;">
+          <i class="fa-solid fa-plus me-1"></i>Register This ONT
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div id="noDiscoveredMsg" style="text-align:center; padding:60px 0; color:#94a3b8;">
+      <i class="fa-solid fa-satellite-dish fa-3x mb-3 d-block" style="opacity:0.2;"></i>
+      <div style="font-size:0.9rem; font-weight:600; margin-bottom:6px;">No unregistered ONTs found yet</div>
+      <div style="font-size:0.78rem;">Click <strong>Scan for New ONTs</strong> above to check this port for connected devices.</div>
+    </div>
+    {% endif %}
+  </div>
+
+</div><!-- /#paneDiscovered -->
+
+<!-- ── Back ── -->
+<div class="mt-4 pt-2">
+  <a href="{% url 'olt_detail' olt.pk %}" class="btn btn-outline-secondary">
+    <i class="fa-solid fa-arrow-left me-2"></i>Back to {{ olt.name }}
+  </a>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = '{{ csrf_token }}';
+
+/* ── Tab switching ── */
+function switchTab(tab) {
+  const tabs   = document.querySelectorAll('.pon-tab');
+  const panes  = document.querySelectorAll('.tab-pane-pon');
+  tabs.forEach(t  => t.classList.remove('active'));
+  panes.forEach(p => p.classList.remove('active'));
+
+  if (tab === 'registered') {
+    document.getElementById('tabRegistered').classList.add('active');
+    document.getElementById('paneRegistered').classList.add('active');
+  } else {
+    document.getElementById('tabDiscovered').classList.add('active');
+    document.getElementById('paneDiscovered').classList.add('active');
+  }
+}
+
+/* ── Filter pills (registered tab) ── */
+function filterCards(type, btn) {
+  document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#ontGrid > .ont-card-wrap, #ontGrid > div').forEach(item => {
+    const f = item.dataset.filter;
+    item.style.display = (type === 'all' || f === type) ? '' : 'none';
+  });
+}
+
+/* ── Scan for unregistered ONTs ── */
+function scanPort() {
+  const btn    = document.getElementById('scanBtn');
+  const status = document.getElementById('scanStatus');
+  const list   = document.getElementById('discoveredList');
+  const badge  = document.getElementById('discTabBadge');
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin me-2"></i>Scanning…';
+  status.style.display = 'block';
+
+  fetch('{% url "scan_pon_port" olt.pk pon_port.pk %}', {
+    method: 'POST',
+    headers: { 'X-CSRFToken': CSRF },
+  })
+  .then(r => r.json())
+  .then(data => {
+    status.style.display = 'none';
+    badge.textContent = data.found;
+
+    if (data.found === 0) {
+      list.innerHTML = `
+        <div style="text-align:center;padding:60px 0;color:#94a3b8;">
+          <i class="fa-solid fa-circle-check fa-3x mb-3 d-block" style="color:#22c55e;opacity:0.5;"></i>
+          <div style="font-size:0.9rem;font-weight:600;margin-bottom:4px;">All clear!</div>
+          <div style="font-size:0.78rem;">No unregistered ONTs detected on this port.</div>
+        </div>`;
+      return;
+    }
+
+    const oltPk = {{ olt.pk }};
+    const ponPk = {{ pon_port.pk }};
+    const cards = data.onts.map(ont => `
+      <div class="disc-card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 3px #fef3c7;flex-shrink:0;"></span>
+          <span style="font-size:0.72rem;font-weight:700;color:#b45309;">Waiting for Registration</span>
+        </div>
+        <div style="font-family:monospace;font-size:0.88rem;font-weight:700;color:#1e293b;margin-bottom:3px;">${ont.serial_number}</div>
+        ${ont.vendor_info ? `<div style="font-size:0.7rem;color:#94a3b8;margin-bottom:8px;">${ont.vendor_info}</div>` : ''}
+        <div style="font-size:0.67rem;color:#b45309;margin-bottom:12px;"><i class="fa-solid fa-clock me-1"></i>Just discovered</div>
+        <a href="/onts/add/?pon_port=${ponPk}&serial=${ont.serial_number}&olt=${oltPk}"
+           class="btn btn-warning btn-sm w-100" style="font-size:0.78rem;">
+          <i class="fa-solid fa-plus me-1"></i>Register This ONT
+        </a>
+      </div>`).join('');
+
+    list.innerHTML = `<div class="disc-grid">${cards}</div>`;
+  })
+  .catch(() => {
+    status.style.display = 'none';
+    list.innerHTML = `<div class="alert alert-danger py-2"><i class="fa-solid fa-triangle-exclamation me-2"></i>Scan failed — could not reach the OLT.</div>`;
+  })
+  .finally(() => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-radar me-2"></i>Scan for New ONTs';
+  });
+}
+
+/* Auto-switch to discovered tab if there are pending ONTs */
+{% if discovered_onts %}
+// Highlight the discovered tab to draw attention, but don't auto-switch
+document.getElementById('tabDiscovered').style.setProperty('animation', 'none');
+{% endif %}
+</script>
+{% endblock %}

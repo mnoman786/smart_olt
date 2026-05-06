@@ -5,6 +5,107 @@
 <li class="breadcrumb-item active">{{ olt.name }}</li>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+/* ── PON Card Grid ── */
+.pon-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.pon-card {
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #fff;
+  padding: 0;
+  overflow: hidden;
+  text-decoration: none !important;
+  display: block;
+  transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+  cursor: pointer;
+}
+.pon-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.10);
+  border-color: #3b82f6;
+}
+
+.pon-card-header {
+  padding: 14px 16px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pon-port-num {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+.pon-port-sub {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 1px;
+}
+
+.pon-status-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.pon-status-up       { background: #22c55e; box-shadow: 0 0 0 3px #dcfce7; }
+.pon-status-down     { background: #ef4444; box-shadow: 0 0 0 3px #fee2e2; }
+.pon-status-degraded { background: #f59e0b; box-shadow: 0 0 0 3px #fef3c7; }
+
+.pon-card-body {
+  padding: 0 16px 14px;
+}
+
+.pon-mini-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pon-mini-stat {
+  flex: 1;
+  text-align: center;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 6px 4px;
+}
+.pon-mini-stat .val { font-size: 1.1rem; font-weight: 700; line-height: 1; }
+.pon-mini-stat .lbl { font-size: 0.62rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.pon-cap-bar { background: #e5e7eb; border-radius: 4px; height: 5px; overflow: hidden; }
+.pon-cap-fill { height: 100%; border-radius: 4px; transition: width 0.6s; }
+
+.pon-tech-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  border: 1px solid #dde3ee;
+  color: #475569;
+  background: #f1f5f9;
+  margin-bottom: 8px;
+}
+
+.pon-card-footer {
+  border-top: 1px solid #f1f5f9;
+  padding: 8px 16px;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pon-row-hover { transition: background 0.15s; }
+.pon-row-hover:hover { background: #f0f7ff; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <div>
@@ -35,10 +136,9 @@
   </div>
 </div>
 
-<!-- SSH Test Result -->
 <div id="sshAlert" class="alert d-none mb-3"></div>
 
-<!-- Info Cards Row -->
+<!-- ── Top Stats ── -->
 <div class="row g-3 mb-4">
   <div class="col-md-3 col-6">
     <div class="info-card">
@@ -70,9 +170,9 @@
   </div>
 </div>
 
+<!-- ── Device Info + Performance ── -->
 <div class="row g-3 mb-4">
-  <!-- Device Info -->
-  <div class="col-md-4">
+  <div class="col-md-5">
     <div class="card card-styled h-100">
       <div class="card-header-styled"><h6 class="mb-0"><i class="fa-solid fa-circle-info me-2 text-primary"></i>Device Info</h6></div>
       <div class="card-body">
@@ -80,85 +180,134 @@
           <tr><th class="text-muted fw-normal w-40" style="font-size:0.83rem;">Vendor</th><td><span class="badge {{ olt.vendor_badge_class }}">{{ olt.vendor }}</span></td></tr>
           <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Model</th><td class="fw-medium">{{ olt.model }}</td></tr>
           <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">IP Address</th><td><code>{{ olt.ip_address }}</code></td></tr>
-          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Telnet Port</th><td>{{ olt.telnet_port }}</td></tr>
           <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">SSH Port</th><td>{{ olt.ssh_port }}</td></tr>
           <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Firmware</th><td class="font-monospace" style="font-size:0.8rem;">{{ olt.firmware_version|default:"—" }}</td></tr>
           <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">SNMP</th><td class="font-monospace" style="font-size:0.8rem;">{{ olt.snmp_community }}</td></tr>
           <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Location</th><td>{{ olt.location|default:"—" }}</td></tr>
-          {% if olt.description %}
-          <tr><th class="text-muted fw-normal" style="font-size:0.83rem;">Notes</th><td style="font-size:0.83rem;">{{ olt.description }}</td></tr>
-          {% endif %}
         </table>
       </div>
     </div>
   </div>
 
-  <!-- Performance -->
-  <div class="col-md-4">
+  <div class="col-md-7">
     <div class="card card-styled h-100">
       <div class="card-header-styled"><h6 class="mb-0"><i class="fa-solid fa-gauge me-2 text-primary"></i>Performance</h6></div>
       <div class="card-body">
-        <div class="mb-3">
-          <div class="d-flex justify-content-between mb-1" style="font-size:0.83rem;">
-            <span>CPU Usage</span>
-            <span id="cpuVal" class="fw-bold">{{ olt.cpu_usage }}%</span>
+        <div class="row g-3 mb-3">
+          <div class="col-4 text-center">
+            <div class="fw-bold fs-4 {% if olt.cpu_usage > 80 %}text-danger{% elif olt.cpu_usage > 60 %}text-warning{% else %}text-success{% endif %}" id="cpuVal">{{ olt.cpu_usage }}%</div>
+            <div class="text-muted" style="font-size:0.75rem;">CPU</div>
+            <div class="progress mt-1" style="height:6px;">
+              <div class="progress-bar {% if olt.cpu_usage > 80 %}bg-danger{% elif olt.cpu_usage > 60 %}bg-warning{% else %}bg-success{% endif %}" id="cpuBar" style="width:{{ olt.cpu_usage }}%"></div>
+            </div>
           </div>
-          <div class="progress" style="height:10px;">
-            <div class="progress-bar {% if olt.cpu_usage > 80 %}bg-danger{% elif olt.cpu_usage > 60 %}bg-warning{% else %}bg-success{% endif %}" id="cpuBar" style="width:{{ olt.cpu_usage }}%"></div>
+          <div class="col-4 text-center">
+            <div class="fw-bold fs-4 {% if olt.memory_usage > 85 %}text-danger{% elif olt.memory_usage > 65 %}text-warning{% else %}text-info{% endif %}" id="memVal">{{ olt.memory_usage }}%</div>
+            <div class="text-muted" style="font-size:0.75rem;">Memory</div>
+            <div class="progress mt-1" style="height:6px;">
+              <div class="progress-bar {% if olt.memory_usage > 85 %}bg-danger{% elif olt.memory_usage > 65 %}bg-warning{% else %}bg-info{% endif %}" id="memBar" style="width:{{ olt.memory_usage }}%"></div>
+            </div>
           </div>
-        </div>
-        <div class="mb-3">
-          <div class="d-flex justify-content-between mb-1" style="font-size:0.83rem;">
-            <span>Memory Usage</span>
-            <span id="memVal" class="fw-bold">{{ olt.memory_usage }}%</span>
-          </div>
-          <div class="progress" style="height:10px;">
-            <div class="progress-bar {% if olt.memory_usage > 85 %}bg-danger{% elif olt.memory_usage > 65 %}bg-warning{% else %}bg-info{% endif %}" id="memBar" style="width:{{ olt.memory_usage }}%"></div>
-          </div>
-        </div>
-        <div>
-          <div class="d-flex justify-content-between mb-1" style="font-size:0.83rem;">
-            <span>Temperature</span>
-            <span id="tempVal" class="fw-bold {% if olt.temperature > 55 %}text-danger{% elif olt.temperature > 45 %}text-warning{% else %}text-success{% endif %}">{{ olt.temperature }}°C</span>
-          </div>
-          <div class="progress" style="height:10px;">
-            <div class="progress-bar {% if olt.temperature > 55 %}bg-danger{% elif olt.temperature > 45 %}bg-warning{% else %}bg-success{% endif %}" id="tempBar" style="width:{{ olt.temperature|floatformat:0 }}%"></div>
+          <div class="col-4 text-center">
+            <div class="fw-bold fs-4 {% if olt.temperature > 55 %}text-danger{% elif olt.temperature > 45 %}text-warning{% else %}text-success{% endif %}" id="tempVal">{{ olt.temperature }}°C</div>
+            <div class="text-muted" style="font-size:0.75rem;">Temperature</div>
+            <div class="progress mt-1" style="height:6px;">
+              <div class="progress-bar {% if olt.temperature > 55 %}bg-danger{% elif olt.temperature > 45 %}bg-warning{% else %}bg-success{% endif %}" id="tempBar" style="width:{{ olt.temperature|floatformat:0 }}%"></div>
+            </div>
           </div>
         </div>
-
-        <!-- Metrics Chart -->
-        <div class="mt-3" style="position:relative; height:120px;">
+        <div style="position:relative; height:110px;">
           <canvas id="metricsChart"></canvas>
         </div>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- PON Ports -->
-  <div class="col-md-4">
-    <div class="card card-styled h-100">
-      <div class="card-header-styled"><h6 class="mb-0"><i class="fa-solid fa-plug me-2 text-primary"></i>PON Ports</h6></div>
-      <div class="card-body p-0">
-        {% for port in pon_ports %}
-        <div class="d-flex align-items-center px-3 py-2 border-bottom">
-          <div class="me-3">
-            <div class="fw-medium" style="font-size:0.85rem;">Board {{ port.board }} / Port {{ port.port }}</div>
-            <div class="text-muted" style="font-size:0.75rem;">{{ port.technology }} &nbsp;•&nbsp; {{ port.ont_count }}/{{ port.max_onts }} ONTs</div>
+<!-- ── PON Ports ── -->
+<div class="card card-styled mb-4">
+  <div class="card-header-styled d-flex align-items-center justify-content-between">
+    <h6 class="mb-0">
+      <i class="fa-solid fa-diagram-project me-2 text-primary"></i>PON Ports
+      <span class="badge bg-secondary ms-2" style="font-size:0.7rem;">{{ pon_ports|length }}</span>
+    </h6>
+    <span class="text-muted" style="font-size:0.78rem;">Click a port to view its ONTs</span>
+  </div>
+  <div class="card-body">
+    {% if pon_ports %}
+    <div class="pon-cards-grid">
+      {% for port in pon_ports %}
+      <a href="{% url 'pon_detail' olt.pk port.pk %}" class="pon-card">
+
+        <!-- Card Header -->
+        <div class="pon-card-header">
+          <div>
+            <div class="pon-port-num">
+              <i class="fa-solid fa-circle-nodes me-1" style="font-size:0.9rem; color:#3b82f6;"></i>
+              B{{ port.board }} / P{{ port.port }}
+            </div>
+            <div class="pon-port-sub">{{ port.port_label }}</div>
           </div>
-          <span class="badge {{ port.status_badge_class }} ms-auto">{{ port.get_status_display }}</span>
+          <span class="pon-status-dot pon-status-{{ port.status }}"></span>
         </div>
-        {% empty %}
-        <div class="text-center text-muted py-4">No PON ports configured</div>
-        {% endfor %}
-      </div>
+
+        <!-- Body -->
+        <div class="pon-card-body">
+          <span class="pon-tech-badge">{{ port.technology }}</span>
+
+          <!-- Mini stats -->
+          <div class="pon-mini-stats">
+            <div class="pon-mini-stat">
+              <div class="val text-success">{{ port.online_count }}</div>
+              <div class="lbl">Online</div>
+            </div>
+            <div class="pon-mini-stat">
+              <div class="val text-danger">{{ port.offline_count }}</div>
+              <div class="lbl">Offline</div>
+            </div>
+            <div class="pon-mini-stat">
+              <div class="val text-secondary">{{ port.total_count }}</div>
+              <div class="lbl">Total</div>
+            </div>
+          </div>
+
+          <!-- Capacity bar -->
+          <div class="d-flex justify-content-between mb-1" style="font-size:0.68rem; color:#94a3b8;">
+            <span>Capacity</span>
+            <span>{{ port.total_count }}/{{ port.max_onts }}</span>
+          </div>
+          <div class="pon-cap-bar">
+            <div class="pon-cap-fill {% if port.total_count > 100 %}bg-danger{% elif port.total_count > 80 %}bg-warning{% else %}bg-success{% endif %}"
+                 style="width: {% widthratio port.total_count port.max_onts 100 %}%"></div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="pon-card-footer">
+          <span>
+            <span class="badge {% if port.status == 'up' %}bg-success{% elif port.status == 'down' %}bg-danger{% else %}bg-warning text-dark{% endif %}" style="font-size:0.6rem;">
+              {{ port.get_status_display }}
+            </span>
+          </span>
+          <span><i class="fa-solid fa-arrow-right" style="font-size:0.65rem;"></i> View ONTs</span>
+        </div>
+
+      </a>
+      {% endfor %}
     </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="fa-solid fa-plug fa-3x mb-3 d-block opacity-20"></i>
+      <p class="mb-0">No PON ports configured on this OLT yet.</p>
+    </div>
+    {% endif %}
   </div>
 </div>
 
-<!-- ONT List -->
+<!-- ── ONT List ── -->
 <div class="card card-styled mb-4">
   <div class="card-header-styled d-flex justify-content-between align-items-center">
-    <h6 class="mb-0"><i class="fa-solid fa-list me-2 text-primary"></i>ONTs on this OLT</h6>
+    <h6 class="mb-0"><i class="fa-solid fa-list me-2 text-primary"></i>All ONTs on this OLT</h6>
     <a href="{% url 'ont_list' %}?olt={{ olt.pk }}" class="btn btn-sm btn-outline-primary">View All</a>
   </div>
   <div class="card-body p-0">
@@ -184,7 +333,7 @@
             </td>
             <td class="font-monospace" style="font-size:0.8rem;">{{ ont.ip_address|default:"—" }}</td>
             <td class="text-muted" style="font-size:0.8rem;">{{ ont.uptime_formatted }}</td>
-            <td><a href="{% url 'ont_detail' ont.pk %}" class="btn btn-xs btn-outline-primary btn-sm py-0 px-2" style="font-size:0.75rem;">View</a></td>
+            <td><a href="{% url 'ont_detail' ont.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:0.75rem;">View</a></td>
           </tr>
           {% empty %}
           <tr><td colspan="8" class="text-center text-muted py-4">No ONTs provisioned yet</td></tr>
@@ -195,7 +344,7 @@
   </div>
 </div>
 
-<!-- Recent Events -->
+<!-- ── Recent Events ── -->
 <div class="card card-styled">
   <div class="card-header-styled"><h6 class="mb-0"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Recent Events</h6></div>
   <div class="card-body p-0">
@@ -238,18 +387,11 @@ function testConnection(id) {
   fetch(`/olts/${id}/test-connection/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
     .then(r => r.json()).then(d => {
       if (d.connected) {
-        showSshAlert(
-          `<i class="fa-solid fa-circle-check me-1"></i><strong>SSH OK</strong> — ` +
-          `${d.vendor} &nbsp;|&nbsp; firmware: <code>${d.firmware || 'N/A'}</code> &nbsp;|&nbsp; latency: ${d.latency_ms} ms`,
-          'success'
-        );
+        showSshAlert(`<i class="fa-solid fa-circle-check me-1"></i><strong>SSH OK</strong> — ${d.vendor} | firmware: <code>${d.firmware || 'N/A'}</code> | latency: ${d.latency_ms} ms`, 'success');
       } else {
         showSshAlert(`<i class="fa-solid fa-circle-xmark me-1"></i><strong>SSH Failed</strong> — ${d.error}`, 'danger');
       }
-    }).finally(() => {
-      btn.innerHTML = '<i class="fa-solid fa-plug me-1"></i>Test SSH';
-      btn.disabled = false;
-    });
+    }).finally(() => { btn.innerHTML = '<i class="fa-solid fa-plug me-1"></i>Test SSH'; btn.disabled = false; });
 }
 
 function refreshOLT(id) {
@@ -258,15 +400,9 @@ function refreshOLT(id) {
   btn.disabled = true;
   fetch(`/olts/${id}/refresh/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
     .then(r => r.json()).then(data => {
-      if (data.status === 'ok') {
-        updatePerfUI(data);
-      } else if (data.status === 'queued') {
-        pollTaskUntilDone(data.task_id, updatePerfUI);
-      }
-    }).finally(() => {
-      btn.innerHTML = '<i class="fa-solid fa-rotate me-1"></i>Poll Now';
-      btn.disabled = false;
-    });
+      if (data.status === 'ok') updatePerfUI(data);
+      else if (data.status === 'queued') pollTaskUntilDone(data.task_id, updatePerfUI);
+    }).finally(() => { btn.innerHTML = '<i class="fa-solid fa-rotate me-1"></i>Poll Now'; btn.disabled = false; });
 }
 
 function updatePerfUI(data) {
@@ -280,43 +416,35 @@ function updatePerfUI(data) {
   }
 }
 
-function pollTaskUntilDone(taskId, onDone, attempts=0) {
+function pollTaskUntilDone(taskId, onDone, attempts = 0) {
   if (attempts > 30) return;
   setTimeout(() => {
-    fetch(`/olts/task/${taskId}/status/`)
-      .then(r => r.json()).then(d => {
-        if (d.status === 'done' && d.result) onDone(d.result);
-        else if (d.status === 'pending') pollTaskUntilDone(taskId, onDone, attempts + 1);
-      });
+    fetch(`/olts/task/${taskId}/status/`).then(r => r.json()).then(d => {
+      if (d.status === 'done' && d.result) onDone(d.result);
+      else if (d.status === 'pending') pollTaskUntilDone(taskId, onDone, attempts + 1);
+    });
   }, 1500);
 }
 
-// Metrics chart
-fetch('/olts/{{ olt.pk }}/metrics-data/')
-  .then(r => r.json())
-  .then(data => {
-    const ctx = document.getElementById('metricsChart').getContext('2d');
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: data.labels,
-        datasets: [
-          { label: 'CPU %', data: data.cpu, borderColor: '#3b82f6', tension: 0.4, borderWidth: 1.5, pointRadius: 0 },
-          { label: 'RAM %', data: data.memory, borderColor: '#10b981', tension: 0.4, borderWidth: 1.5, pointRadius: 0 },
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { font: { size: 10 }, boxWidth: 10 } } },
-        scales: {
-          y: { beginAtZero: true, max: 100, ticks: { font: { size: 9 } } },
-          x: { display: false }
-        }
-      }
-    });
+fetch('/olts/{{ olt.pk }}/metrics-data/').then(r => r.json()).then(data => {
+  const ctx = document.getElementById('metricsChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.labels,
+      datasets: [
+        { label: 'CPU %',  data: data.cpu,    borderColor: '#3b82f6', tension: 0.4, borderWidth: 1.5, pointRadius: 0, fill: false },
+        { label: 'RAM %',  data: data.memory, borderColor: '#10b981', tension: 0.4, borderWidth: 1.5, pointRadius: 0, fill: false },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { font: { size: 10 }, boxWidth: 10 } } },
+      scales: { y: { beginAtZero: true, max: 100, ticks: { font: { size: 9 } } }, x: { display: false } }
+    }
   });
+});
 
-// DataTable
 $(document).ready(() => { if ($('.data-table').length) $('.data-table').DataTable({ pageLength: 25, order: [] }); });
 </script>
 {% endblock %}

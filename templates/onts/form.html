@@ -6,57 +6,489 @@
 <li class="breadcrumb-item active">{{ action }}</li>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+.form-page { max-width: 900px; margin: 0 auto; }
+
+/* Steps indicator */
+.steps-bar {
+  display: flex; align-items: center;
+  background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px;
+  padding: 16px 24px; margin-bottom: 22px; gap: 0; overflow-x: auto;
+}
+.step-item {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.step-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+  background: #f1f5f9; color: #94a3b8;
+  border: 2px solid #e2e8f0;
+}
+.step-num.active  { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+.step-num.done    { background: #22c55e; color: #fff; border-color: #22c55e; }
+.step-label { font-size: 0.75rem; font-weight: 600; color: #94a3b8; }
+.step-label.active { color: #1d4ed8; }
+.step-label.done   { color: #16a34a; }
+.step-divider { flex: 1; min-width: 20px; height: 2px; background: #e2e8f0; margin: 0 10px; }
+.step-divider.done { background: #22c55e; }
+
+/* Section card */
+.form-section {
+  background: #fff; border: 1.5px solid #e2e8f0;
+  border-radius: 14px; margin-bottom: 18px; overflow: hidden;
+}
+.form-section-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 22px; border-bottom: 1px solid #f1f5f9; background: #fafbfd;
+}
+.form-section-icon {
+  width: 34px; height: 34px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.88rem; flex-shrink: 0;
+}
+.form-section-title { font-size: 0.9rem; font-weight: 700; color: #1e293b; margin: 0; }
+.form-section-sub   { font-size: 0.72rem; color: #94a3b8; margin: 0; }
+.form-section-body  { padding: 20px 22px; }
+
+/* Input with icon */
+.input-icon-wrap { position: relative; }
+.input-icon-wrap .ii {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  color: #94a3b8; font-size: 0.78rem; pointer-events: none;
+}
+.input-icon-wrap .form-control,
+.input-icon-wrap .form-select { padding-left: 32px; }
+
+/* Form label */
+.form-label { font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 4px; }
+.field-hint  { font-size: 0.68rem; color: #94a3b8; margin-top: 2px; }
+
+/* ONT ID badge preview */
+.ont-id-preview {
+  background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px;
+  padding: 10px 14px; font-size: 0.8rem; color: #15803d; display: none;
+}
+
+/* Technology toggle */
+.tech-toggle { display: flex; gap: 6px; }
+.tech-btn {
+  flex: 1; border: 2px solid #e2e8f0; border-radius: 8px;
+  padding: 8px 6px; text-align: center; cursor: pointer;
+  font-size: 0.75rem; font-weight: 600; color: #475569;
+  background: #f8fafc; transition: all 0.15s;
+}
+.tech-btn:hover { border-color: #93c5fd; background: #eff6ff; }
+.tech-btn.active { border-color: #3b82f6; background: #dbeafe; color: #1d4ed8; }
+
+/* Mode toggle */
+.mode-toggle { display: flex; gap: 6px; }
+.mode-btn {
+  flex: 1; border: 2px solid #e2e8f0; border-radius: 8px;
+  padding: 10px 6px; text-align: center; cursor: pointer; background: #f8fafc;
+  transition: all 0.15s;
+}
+.mode-btn:hover { border-color: #93c5fd; }
+.mode-btn.active { border-color: #8b5cf6; background: #ede9fe; }
+.mode-btn .mode-icon { font-size: 1.1rem; margin-bottom: 4px; }
+.mode-btn .mode-label { font-size: 0.7rem; font-weight: 600; color: #475569; }
+.mode-btn.active .mode-label { color: #7c3aed; }
+
+/* Serial hint box */
+.serial-hint {
+  background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
+  padding: 8px 12px; font-size: 0.72rem; color: #92400e; margin-top: 6px;
+}
+
+/* Save bar */
+.form-save-bar {
+  background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px;
+  padding: 18px 22px; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
-  <h4 class="page-title"><i class="fa-solid fa-network-wired me-2 text-primary"></i>{{ action }}</h4>
+  <div>
+    <h4 class="page-title"><i class="fa-solid fa-network-wired me-2 text-primary"></i>{{ action }}</h4>
+    <p class="page-subtitle">Register a new ONT/ONU device on a PON port</p>
+  </div>
 </div>
-<div class="row justify-content-center">
-  <div class="col-lg-9">
-    <div class="card card-styled">
-      <div class="card-body">
-        <form method="post">
-          {% csrf_token %}
-          <div class="row g-3">
-            <div class="col-12"><h6 class="text-muted border-bottom pb-2">OLT Assignment</h6></div>
-            <div class="col-md-6"><label class="form-label fw-medium">OLT <span class="text-danger">*</span></label>{{ form.olt }}</div>
-            <div class="col-md-4"><label class="form-label fw-medium">PON Port</label>{{ form.pon_port }}</div>
-            <div class="col-md-2"><label class="form-label fw-medium">ONT ID</label>{{ form.ont_id }}</div>
 
-            <div class="col-12"><h6 class="text-muted border-bottom pb-2 mt-2">ONT Identity</h6></div>
-            <div class="col-md-6"><label class="form-label fw-medium">Customer Name <span class="text-danger">*</span></label>{{ form.name }}</div>
-            <div class="col-md-6"><label class="form-label fw-medium">Serial Number <span class="text-danger">*</span></label>{{ form.serial_number }}</div>
-            <div class="col-12"><label class="form-label fw-medium">Description</label>{{ form.description }}</div>
+<div class="form-page">
 
-            <div class="col-12"><h6 class="text-muted border-bottom pb-2 mt-2">Network Configuration</h6></div>
-            <div class="col-md-3"><label class="form-label fw-medium">Technology</label>{{ form.technology }}</div>
-            <div class="col-md-3"><label class="form-label fw-medium">Mode</label>{{ form.mode }}</div>
-            <div class="col-md-3"><label class="form-label fw-medium">VLAN</label>{{ form.vlan }}</div>
-            <div class="col-md-3"><label class="form-label fw-medium">Speed Profile</label>{{ form.profile }}</div>
-            <div class="col-md-6"><label class="form-label fw-medium">IP Address</label>{{ form.ip_address }}</div>
-            <div class="col-md-6"><label class="form-label fw-medium">MAC Address</label>{{ form.mac_address }}</div>
+<!-- ── Discovery pre-fill banner ── -->
+{% if prefill_serial %}
+<div style="background:linear-gradient(90deg,#fffbeb,#fef9c3);border:1.5px solid #fcd34d;border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px;">
+  <div style="width:38px;height:38px;border-radius:9px;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+    <i class="fa-solid fa-satellite-dish" style="color:#d97706;"></i>
+  </div>
+  <div>
+    <div style="font-size:0.88rem;font-weight:700;color:#92400e;">ONT detected from fiber scan</div>
+    <div style="font-size:0.75rem;color:#b45309;">
+      Serial <code style="background:#fef3c7;padding:1px 5px;border-radius:4px;">{{ prefill_serial }}</code>
+      was discovered on the PON port. Fields have been pre-filled — just add the customer name and save.
+    </div>
+  </div>
+</div>
+{% endif %}
 
-            <div class="col-12"><h6 class="text-muted border-bottom pb-2 mt-2">Location</h6></div>
-            <div class="col-12"><label class="form-label fw-medium">Address</label>{{ form.address }}</div>
-            <div class="col-md-6"><label class="form-label fw-medium">Latitude</label>{{ form.latitude }}</div>
-            <div class="col-md-6"><label class="form-label fw-medium">Longitude</label>{{ form.longitude }}</div>
+<!-- ── Steps indicator ── -->
+<div class="steps-bar">
+  <div class="step-item">
+    <div class="step-num active">1</div>
+    <span class="step-label active">Assignment</span>
+  </div>
+  <div class="step-divider"></div>
+  <div class="step-item">
+    <div class="step-num">2</div>
+    <span class="step-label">Identity</span>
+  </div>
+  <div class="step-divider"></div>
+  <div class="step-item">
+    <div class="step-num">3</div>
+    <span class="step-label">Service</span>
+  </div>
+  <div class="step-divider"></div>
+  <div class="step-item">
+    <div class="step-num">4</div>
+    <span class="step-label">Network</span>
+  </div>
+  <div class="step-divider"></div>
+  <div class="step-item">
+    <div class="step-num">5</div>
+    <span class="step-label">Location</span>
+  </div>
+</div>
 
-            {% if form.errors %}
-            <div class="col-12">
-              <div class="alert alert-danger">
-                {% for field, errors in form.errors.items %}{% for error in errors %}
-                <div><i class="fa-solid fa-circle-xmark me-1"></i>{{ field }}: {{ error }}</div>
-                {% endfor %}{% endfor %}
-              </div>
-            </div>
-            {% endif %}
-            <div class="col-12 d-flex gap-2">
-              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Save ONT</button>
-              <a href="{% if ont %}{% url 'ont_detail' ont.pk %}{% else %}{% url 'ont_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
-            </div>
-          </div>
-        </form>
+<form method="post" id="ontForm">
+{% csrf_token %}
+
+<!-- ── 1. Assignment ── -->
+<div class="form-section">
+  <div class="form-section-header">
+    <div class="form-section-icon" style="background:#eff6ff;">
+      <i class="fa-solid fa-diagram-project text-primary"></i>
+    </div>
+    <div>
+      <div class="form-section-title">1 — OLT Assignment</div>
+      <div class="form-section-sub">Select which OLT, PON port, and slot this ONT belongs to</div>
+    </div>
+  </div>
+  <div class="form-section-body">
+    <div class="row g-3">
+      <div class="col-md-5">
+        <label class="form-label">OLT Device <span class="text-danger">*</span></label>
+        <div class="input-icon-wrap">
+          <i class="ii fa-solid fa-server"></i>
+          {{ form.olt }}
+        </div>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label">PON Port</label>
+        <div class="input-icon-wrap">
+          <i class="ii fa-solid fa-plug"></i>
+          {{ form.pon_port }}
+        </div>
+        <div class="field-hint">Select OLT first to load available ports</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">ONT ID</label>
+        {{ form.ont_id }}
+        <div class="field-hint">Slot # on port</div>
+      </div>
+    </div>
+
+    <!-- Port label preview -->
+    <div class="ont-id-preview mt-3" id="portPreview">
+      <i class="fa-solid fa-circle-check me-1"></i>
+      Port label: <strong id="portLabelText"></strong> &nbsp;·&nbsp; ONT ID: <strong id="ontIdText"></strong>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2. Identity ── -->
+<div class="form-section">
+  <div class="form-section-header">
+    <div class="form-section-icon" style="background:#faf5ff;">
+      <i class="fa-solid fa-id-card" style="color:#7c3aed;"></i>
+    </div>
+    <div>
+      <div class="form-section-title">2 — ONT Identity</div>
+      <div class="form-section-sub">Customer name and unique device serial number</div>
+    </div>
+  </div>
+  <div class="form-section-body">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Customer / Device Name <span class="text-danger">*</span></label>
+        <div class="input-icon-wrap">
+          <i class="ii fa-solid fa-user"></i>
+          {{ form.name }}
+        </div>
+        <div class="field-hint">E.g. "John Smith" or "Building-A-Room-201"</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Serial Number <span class="text-danger">*</span></label>
+        <div class="input-icon-wrap">
+          <i class="ii fa-solid fa-barcode"></i>
+          {{ form.serial_number }}
+        </div>
+        <div class="serial-hint">
+          <i class="fa-solid fa-circle-info me-1"></i>
+          ZTE format: <code>ZTEGXXXXXXXX</code> &nbsp;|&nbsp; Huawei format: <code>48575443XXXXXXXX</code>
+        </div>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Description / Notes</label>
+        {{ form.description }}
       </div>
     </div>
   </div>
 </div>
+
+<!-- ── 3. Service Config ── -->
+<div class="form-section">
+  <div class="form-section-header">
+    <div class="form-section-icon" style="background:#f0fdf4;">
+      <i class="fa-solid fa-sliders" style="color:#16a34a;"></i>
+    </div>
+    <div>
+      <div class="form-section-title">3 — Service Configuration</div>
+      <div class="form-section-sub">Technology, operating mode, speed profile and VLAN</div>
+    </div>
+  </div>
+  <div class="form-section-body">
+
+    <!-- Technology -->
+    <div class="mb-4">
+      <label class="form-label">Technology</label>
+      <div class="tech-toggle">
+        <div class="tech-btn {% if form.technology.value == 'GPON' or not form.technology.value %}active{% endif %}"
+             onclick="selectTech('GPON', this)">
+          <div>GPON</div><div style="font-size:0.65rem; color:#94a3b8; margin-top:2px;">2.5G / 1.25G</div>
+        </div>
+        <div class="tech-btn {% if form.technology.value == 'EPON' %}active{% endif %}"
+             onclick="selectTech('EPON', this)">
+          <div>EPON</div><div style="font-size:0.65rem; color:#94a3b8; margin-top:2px;">1G / 1G</div>
+        </div>
+        <div class="tech-btn {% if form.technology.value == 'XGS-PON' %}active{% endif %}"
+             onclick="selectTech('XGS-PON', this)">
+          <div>XGS-PON</div><div style="font-size:0.65rem; color:#94a3b8; margin-top:2px;">10G / 10G</div>
+        </div>
+      </div>
+      <div style="display:none;">{{ form.technology }}</div>
+    </div>
+
+    <!-- Mode -->
+    <div class="mb-4">
+      <label class="form-label">Operating Mode</label>
+      <div class="mode-toggle">
+        <div class="mode-btn {% if form.mode.value == 'routing' or not form.mode.value %}active{% endif %}"
+             onclick="selectMode('routing', this)">
+          <div class="mode-icon"><i class="fa-solid fa-route" style="color:#6366f1;"></i></div>
+          <div class="mode-label">Routing</div>
+          <div style="font-size:0.62rem; color:#94a3b8;">Layer 3 — NAT/DHCP</div>
+        </div>
+        <div class="mode-btn {% if form.mode.value == 'bridging' %}active{% endif %}"
+             onclick="selectMode('bridging', this)">
+          <div class="mode-icon"><i class="fa-solid fa-network-wired" style="color:#0891b2;"></i></div>
+          <div class="mode-label">Bridging</div>
+          <div style="font-size:0.62rem; color:#94a3b8;">Layer 2 — transparent</div>
+        </div>
+      </div>
+      <div style="display:none;">{{ form.mode }}</div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Speed Profile</label>
+        <div class="input-icon-wrap">
+          <i class="ii fa-solid fa-gauge-high"></i>
+          {{ form.profile }}
+        </div>
+        <div class="field-hint">Optional — sets download/upload limits</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">VLAN</label>
+        <div class="input-icon-wrap">
+          <i class="ii fa-solid fa-layer-group"></i>
+          {{ form.vlan }}
+        </div>
+        <div class="field-hint">Service VLAN tag (default: 100)</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 4. Network ── -->
+<div class="form-section">
+  <div class="form-section-header">
+    <div class="form-section-icon" style="background:#fff7ed;">
+      <i class="fa-solid fa-wifi" style="color:#ea580c;"></i>
+    </div>
+    <div>
+      <div class="form-section-title">4 — Network Details</div>
+      <div class="form-section-sub">IP and MAC address assignment (optional)</div>
+    </div>
+  </div>
+  <div class="form-section-body">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">IP Address</label>
+        <div class="input-icon-wrap">
+          <i class="ii fa-solid fa-at"></i>
+          {{ form.ip_address }}
+        </div>
+        <div class="field-hint">Leave blank if using DHCP</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">MAC Address</label>
+        <div class="input-icon-wrap">
+          <i class="ii fa-solid fa-fingerprint"></i>
+          {{ form.mac_address }}
+        </div>
+        <div class="field-hint">Format: AA:BB:CC:DD:EE:FF</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 5. Location (collapsible) ── -->
+<div class="form-section">
+  <div class="form-section-header" style="cursor:pointer;" onclick="toggleLocation()">
+    <div class="form-section-icon" style="background:#fef2f2;">
+      <i class="fa-solid fa-location-dot" style="color:#dc2626;"></i>
+    </div>
+    <div style="flex:1;">
+      <div class="form-section-title">5 — Location <span style="font-size:0.7rem; font-weight:400; color:#94a3b8; margin-left:6px;">optional</span></div>
+      <div class="form-section-sub">Physical installation address and GPS coordinates</div>
+    </div>
+    <i class="fa-solid fa-chevron-down text-muted" id="locChevron" style="transition:transform 0.2s;"></i>
+  </div>
+  <div id="locationBody" class="form-section-body" style="display:none;">
+    <div class="row g-3">
+      <div class="col-12">
+        <label class="form-label">Installation Address</label>
+        <div class="input-icon-wrap">
+          <i class="ii fa-solid fa-map-pin"></i>
+          {{ form.address }}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Latitude</label>
+        {{ form.latitude }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Longitude</label>
+        {{ form.longitude }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Errors ── -->
+{% if form.errors %}
+<div class="alert alert-danger d-flex gap-2 align-items-start">
+  <i class="fa-solid fa-circle-xmark mt-1 flex-shrink-0"></i>
+  <div>
+    <strong>Please fix the following errors:</strong>
+    {% for field, errors in form.errors.items %}
+      {% for error in errors %}<div>{{ field }}: {{ error }}</div>{% endfor %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Save Bar ── -->
+<div class="form-save-bar">
+  <div style="font-size:0.8rem; color:#94a3b8;">
+    <i class="fa-solid fa-circle-info me-1"></i>
+    Fields marked <span class="text-danger fw-bold">*</span> are required
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% if ont %}{% url 'ont_detail' ont.pk %}{% else %}{% url 'ont_list' %}{% endif %}"
+       class="btn btn-outline-secondary">Cancel</a>
+    <button type="submit" class="btn btn-primary px-4">
+      <i class="fa-solid fa-floppy-disk me-1"></i>Save ONT
+    </button>
+  </div>
+</div>
+
+</form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ── Technology ── */
+function selectTech(val, el) {
+  document.querySelectorAll('.tech-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('id_technology').value = val;
+}
+
+/* ── Mode ── */
+function selectMode(val, el) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('id_mode').value = val;
+}
+
+/* ── Location toggle ── */
+function toggleLocation() {
+  const body = document.getElementById('locationBody');
+  const chev = document.getElementById('locChevron');
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    chev.style.transform = 'rotate(180deg)';
+  } else {
+    body.style.display = 'none';
+    chev.style.transform = 'rotate(0deg)';
+  }
+}
+
+/* ── Port label preview ── */
+function updatePreview() {
+  const ponSel  = document.getElementById('id_pon_port');
+  const ontId   = document.getElementById('id_ont_id').value;
+  const preview = document.getElementById('portPreview');
+  if (ponSel && ponSel.value && ontId) {
+    const txt = ponSel.options[ponSel.selectedIndex]?.text || '';
+    document.getElementById('portLabelText').textContent = txt;
+    document.getElementById('ontIdText').textContent = ontId;
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const ponSel = document.getElementById('id_pon_port');
+  const ontId  = document.getElementById('id_ont_id');
+  if (ponSel) ponSel.addEventListener('change', updatePreview);
+  if (ontId)  ontId.addEventListener('input',  updatePreview);
+  updatePreview();
+
+  // Auto-open location if fields have values (edit mode)
+  const addr = '{{ form.address.value|default:"" }}';
+  const lat  = '{{ form.latitude.value|default:"" }}';
+  if (addr || lat) toggleLocation();
+
+  // Step indicator — mark all as done (edit mode)
+  {% if ont %}
+  document.querySelectorAll('.step-num').forEach(s => {
+    s.classList.remove('active');
+    s.classList.add('done');
+    s.innerHTML = '<i class="fa-solid fa-check" style="font-size:0.65rem;"></i>';
+  });
+  document.querySelectorAll('.step-divider').forEach(d => d.classList.add('done'));
+  document.querySelectorAll('.step-label').forEach(l => { l.classList.remove('active'); l.classList.add('done'); });
+  {% endif %}
+});
+</script>
 {% endblock %}
