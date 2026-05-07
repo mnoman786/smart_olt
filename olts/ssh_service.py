@@ -138,7 +138,6 @@ class ZTEParser:
         """
         results = []
         for line in output.splitlines():
-            # Match lines like: -  ZTEG12345678  ZTEG  ZTE-F660
             m = re.match(r'\s*-\s+([A-F0-9a-z]{12,16})\s+(\S+)\s+(\S+)', line)
             if m:
                 serial, vendor_id, onu_type = m.groups()
@@ -146,6 +145,50 @@ class ZTEParser:
                     'serial_number': serial.upper(),
                     'vendor_info': f'{vendor_id} {onu_type}'.strip(),
                 })
+        return results
+
+    @staticmethod
+    def parse_port_list(output: str) -> list[tuple]:
+        """
+        Parse 'show interface gpon-olt' output.
+        Returns list of (board, port) tuples.
+        Sample: Interface: gpon-olt_1/1/1
+        """
+        ports = []
+        for m in re.finditer(r'gpon-olt_(\d+)/\d+/(\d+)', output):
+            board, port = int(m.group(1)), int(m.group(2))
+            if (board, port) not in ports:
+                ports.append((board, port))
+        return ports
+
+    @staticmethod
+    def parse_ont_detail(output: str) -> list[dict]:
+        """
+        Parse 'show gpon onu detail-info gpon-olt_X/X/X' output.
+        Returns list of {ont_id, serial_number, status, name}.
+        Sample:  ONU Index  : gpon-onu_1/1/1:1
+                 SN         : ZTEG12345678
+                 Run State  : working
+        """
+        results = []
+        current: dict = {}
+        for line in output.splitlines():
+            m_idx = re.search(r'gpon-onu_\d+/\d+/\d+:(\d+)', line)
+            if m_idx:
+                if current:
+                    results.append(current)
+                current = {'ont_id': int(m_idx.group(1)), 'serial_number': '', 'status': 'offline', 'name': ''}
+            m_sn = re.match(r'\s*SN\s*:\s*(\S+)', line)
+            if m_sn and current:
+                current['serial_number'] = m_sn.group(1).upper()
+            m_name = re.match(r'\s*[Nn]ame\s*:\s*(.+)', line)
+            if m_name and current:
+                current['name'] = m_name.group(1).strip()
+            m_state = re.match(r'\s*[Rr]un\s+[Ss]tate\s*:\s*(\S+)', line)
+            if m_state and current:
+                current['status'] = 'online' if m_state.group(1).lower() == 'working' else 'offline'
+        if current:
+            results.append(current)
         return results
 
 
@@ -231,7 +274,6 @@ class HuaweiParser:
         """
         results = []
         for line in output.splitlines():
-            # Match lines with a hex serial number (16 chars for Huawei OMCI format)
             m = re.match(r'\s*[\d/]+\s+-\s+([A-Fa-f0-9]{16})\s+', line)
             if m:
                 serial = m.group(1).upper()
@@ -239,6 +281,50 @@ class HuaweiParser:
                     'serial_number': serial,
                     'vendor_info': 'Huawei Auto-Found',
                 })
+        return results
+
+    @staticmethod
+    def parse_port_list(output: str) -> list[tuple]:
+        """
+        Parse 'display board 0' output.
+        Returns list of (board, port) tuples.
+        Huawei boards are identified by slot number; each GPON board has ports 0-7 or 0-15.
+        Sample: 0    H805GPFD    Normal   ...   (8 ports)
+        """
+        ports = []
+        for line in output.splitlines():
+            m = re.match(r'\s*(\d+)\s+\S+GPFD\S*\s+Normal', line, re.I)
+            if m:
+                board = int(m.group(1))
+                for p in range(8):
+                    ports.append((board, p))
+        return ports
+
+    @staticmethod
+    def parse_ont_detail(output: str) -> list[dict]:
+        """
+        Parse 'display ont info X X all' output.
+        Returns list of {ont_id, serial_number, status, name}.
+        """
+        results = []
+        current: dict = {}
+        for line in output.splitlines():
+            m_id = re.match(r'\s*ONT-ID\s*:\s*(\d+)', line, re.I)
+            if m_id:
+                if current:
+                    results.append(current)
+                current = {'ont_id': int(m_id.group(1)), 'serial_number': '', 'status': 'offline', 'name': ''}
+            m_sn = re.match(r'\s*SN\s*:\s*(\S+)', line, re.I)
+            if m_sn and current:
+                current['serial_number'] = m_sn.group(1).upper()
+            m_name = re.match(r'\s*[Dd]escription\s*:\s*(.+)', line)
+            if m_name and current:
+                current['name'] = m_name.group(1).strip()
+            m_state = re.match(r'\s*[Rr]un\s+[Ss]tate\s*:\s*(\S+)', line, re.I)
+            if m_state and current:
+                current['status'] = 'online' if 'online' in m_state.group(1).lower() else 'offline'
+        if current:
+            results.append(current)
         return results
 
 
@@ -250,11 +336,12 @@ _VENDOR_COMMANDS = {
         'cpu':         'show cpu',
         'memory':      'show memory',
         'temperature': 'show temperature',
+        'port_list':   'show interface gpon-olt',
         'ont_list':    'show gpon onu state gpon-olt_{board}/{port_b}/{port}',
+        'ont_detail':  'show gpon onu detail-info gpon-olt_{board}/{port_b}/{port}',
         'optical':     'show gpon onu optical-info interface gpon-onu_{board}/{port_b}/{port}:{ont_id}',
         'reboot':      'interface gpon-onu_{board}/{port_b}/{port}:{ont_id}\nreboot\nexit',
         'factory_reset': 'interface gpon-onu_{board}/{port_b}/{port}:{ont_id}\nfactory-reset\nexit',
-        # Auto-discovery: ONTs connected but not yet registered
         'uncfg_list':  'show gpon onu uncfg gpon-olt_{board}/{port_b}/{port}',
     },
     'HUAWEI': {
@@ -262,11 +349,12 @@ _VENDOR_COMMANDS = {
         'cpu':         'display cpu-usage',
         'memory':      'display memory-usage',
         'temperature': 'display temperature 0',
+        'port_list':   'display board 0',
         'ont_list':    'display ont info {board} {port} all',
+        'ont_detail':  'display ont info {board} {port} all',
         'optical':     'display ont optical-info {board} {port} {ont_id}',
         'reboot':      'interface gpon {board}/{port}\nont reset {ont_id}\nquit',
         'factory_reset': 'interface gpon {board}/{port}\nont factory-reset {ont_id}\nquit',
-        # Auto-discovery: ONTs connected but not yet registered
         'uncfg_list':  'display ont autofind {board} {port}',
     },
 }
@@ -346,6 +434,43 @@ def _demo_ont_command(command: str) -> dict:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def _test_ssh_raw(host: str, port: int, username: str, password: str) -> dict:
+    """
+    Pure paramiko connectivity check — no prompt detection, works with any SSH server.
+    Returns {connected, latency_ms, error}.
+    """
+    import time
+    import paramiko
+    t0 = time.monotonic()
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        client.connect(
+            hostname=host,
+            port=port,
+            username=username,
+            password=password,
+            timeout=SSH_TIMEOUT,
+            auth_timeout=SSH_TIMEOUT,
+            look_for_keys=False,
+            allow_agent=False,
+        )
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        client.close()
+        return {'connected': True, 'latency_ms': latency_ms, 'error': ''}
+    except paramiko.AuthenticationException:
+        return {'connected': False, 'latency_ms': 0, 'error': 'Authentication failed — wrong username or password.'}
+    except paramiko.ssh_exception.NoValidConnectionsError:
+        return {'connected': False, 'latency_ms': 0, 'error': f'Cannot reach {host}:{port} — host unreachable or port closed.'}
+    except Exception as exc:
+        return {'connected': False, 'latency_ms': 0, 'error': str(exc)}
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+
+
 def test_connection(olt) -> dict:
     """
     Test SSH connectivity to an OLT.
@@ -360,30 +485,19 @@ def test_connection(olt) -> dict:
             'error': '',
         }
 
-    import time
-    t0 = time.monotonic()
-    try:
-        with _ssh_connection(olt) as conn:
-            cmds = _VENDOR_COMMANDS[olt.vendor]
-            parser = _PARSERS[olt.vendor]
-            output = conn.send_command(cmds['version'], read_timeout=SSH_TIMEOUT)
-            latency_ms = int((time.monotonic() - t0) * 1000)
-            return {
-                'connected': True,
-                'vendor': olt.vendor,
-                'firmware': parser.parse_firmware(output),
-                'latency_ms': latency_ms,
-                'error': '',
-            }
-    except Exception as exc:
-        logger.error('test_connection OLT %s: %s', olt.ip_address, exc)
-        return {
-            'connected': False,
-            'vendor': olt.vendor,
-            'firmware': '',
-            'latency_ms': 0,
-            'error': str(exc),
-        }
+    result = _test_ssh_raw(
+        host=str(olt.ip_address),
+        port=olt.ssh_port,
+        username=olt.username,
+        password=olt.password,
+    )
+    return {
+        'connected': result['connected'],
+        'vendor': olt.vendor,
+        'firmware': '',
+        'latency_ms': result['latency_ms'],
+        'error': result['error'],
+    }
 
 
 def poll_olt_stats_sync(olt) -> dict:
@@ -614,3 +728,83 @@ def poll_all_ont_signals_sync(olt) -> int:
             updated += 1
 
     return updated
+
+
+def sync_olt_from_device_sync(olt) -> dict:
+    """
+    Auto-discover PON ports and registered ONTs from a live OLT via SSH.
+    Creates PONPort and ONT records in the DB for anything not already present.
+    Returns a summary dict: {ports_found, onts_found, error}
+    """
+    from .models import PONPort
+    from onts.models import ONT
+
+    if DEMO_MODE:
+        return {'ports_found': 0, 'onts_found': 0, 'error': 'demo mode — no real device'}
+
+    cmds = _VENDOR_COMMANDS.get(olt.vendor, {})
+    parser = _PARSERS.get(olt.vendor)
+    if not parser or not cmds:
+        return {'ports_found': 0, 'onts_found': 0, 'error': f'Unsupported vendor: {olt.vendor}'}
+
+    ports_found = 0
+    onts_found = 0
+    error = ''
+
+    try:
+        with _ssh_connection(olt) as conn:
+            # ── Step 1: discover PON ports ────────────────────────────────────
+            port_list_cmd = cmds.get('port_list', '')
+            port_tuples: list[tuple] = []
+            if port_list_cmd:
+                try:
+                    out = conn.send_command(port_list_cmd, read_timeout=SSH_TIMEOUT)
+                    port_tuples = parser.parse_port_list(out)
+                except Exception:
+                    pass
+
+            # Fallback: probe board 1, ports 1-16 (ZTE style)
+            if not port_tuples:
+                port_tuples = [(1, p) for p in range(1, 17)]
+
+            # ── Step 2: for each port, try to fetch registered ONTs ──────────
+            for board, port_num in port_tuples:
+                ont_detail_cmd = _fmt(cmds.get('ont_detail', ''), board=board, port_b=1, port=port_num)
+                try:
+                    detail_out = conn.send_command(ont_detail_cmd, read_timeout=SSH_TIMEOUT)
+                    ont_entries = parser.parse_ont_detail(detail_out)
+                except Exception:
+                    ont_entries = []
+
+                # If nothing on this port, skip creating it (avoids ghost ports)
+                if not ont_entries:
+                    continue
+
+                # Create PONPort if missing
+                pon_port, created = PONPort.objects.get_or_create(
+                    olt=olt, board=board, port=port_num,
+                    defaults={'technology': 'GPON', 'max_onts': 128},
+                )
+                if created:
+                    ports_found += 1
+
+                # Create ONT stubs
+                for entry in ont_entries:
+                    _, ont_created = ONT.objects.get_or_create(
+                        olt=olt,
+                        pon_port=pon_port,
+                        ont_id=entry['ont_id'],
+                        defaults={
+                            'name': entry.get('name') or f"ONT-{entry['ont_id']}",
+                            'serial_number': entry.get('serial_number', ''),
+                            'status': entry.get('status', 'offline'),
+                        },
+                    )
+                    if ont_created:
+                        onts_found += 1
+
+    except Exception as exc:
+        logger.error('sync_olt_from_device OLT %s: %s', olt.ip_address, exc)
+        error = str(exc)
+
+    return {'ports_found': ports_found, 'onts_found': onts_found, 'error': error}

@@ -68,8 +68,21 @@ def olt_create(request):
     if request.method == 'POST':
         form = OLTForm(request.POST)
         if form.is_valid():
-            olt = form.save()
-            messages.success(request, f'OLT "{olt.name}" created successfully.')
+            olt = form.save(commit=False)
+            olt.status = 'unknown'
+            olt.save()
+
+            task_id = None
+            try:
+                from .tasks import setup_new_olt
+                task = setup_new_olt.delay(olt.pk)
+                task_id = task.id
+            except Exception:
+                pass
+
+            messages.info(request, f'OLT "{olt.name}" saved. Testing connection and syncing data in the background…')
+            if task_id:
+                return redirect(f'/olts/{olt.pk}/?setup_task={task_id}')
             return redirect('olt_detail', pk=olt.pk)
     else:
         form = OLTForm()
@@ -138,14 +151,112 @@ def olt_refresh(request, pk):
 @login_required
 @operator_required
 def olt_test_connection(request, pk):
-    """Test SSH connectivity to an OLT and return results as JSON."""
+    """Test SSH connectivity to a saved OLT and return results as JSON.
+    Updates OLT status to 'online' on success, 'offline' on failure."""
     if request.method != 'POST':
         return JsonResponse({'status': 'error'}, status=405)
 
     olt = get_object_or_404(OLT, pk=pk)
     from .ssh_service import test_connection
     result = test_connection(olt)
+
+    new_status = 'online' if result.get('connected') else 'offline'
+    if olt.status != new_status:
+        OLT.objects.filter(pk=pk).update(status=new_status)
+        result['status_updated'] = True
+        result['new_status'] = new_status
+
     return JsonResponse(result)
+
+
+@login_required
+@operator_required
+def olt_test_connection_raw(request):
+    """
+    Test SSH connectivity using raw form fields (no saved OLT needed).
+    Used by the Add OLT form before the device is saved.
+    POST body: ip_address, ssh_port, username, password, vendor
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    ip       = request.POST.get('ip_address', '').strip()
+    port     = int(request.POST.get('ssh_port', 22))
+    username = request.POST.get('username', '').strip()
+    password = request.POST.get('password', '').strip()
+    vendor   = request.POST.get('vendor', 'ZTE').strip().upper()
+
+    if not ip or not username or not password:
+        return JsonResponse({'connected': False, 'error': 'IP, username and password are required.'})
+
+    from .ssh_service import DEMO_MODE, _test_ssh_raw
+    if DEMO_MODE:
+        return JsonResponse({
+            'connected': True,
+            'vendor': vendor,
+            'firmware': 'V2.0.1P2 (demo)',
+            'latency_ms': 12,
+            'error': '',
+        })
+
+    result = _test_ssh_raw(host=ip, port=port, username=username, password=password)
+    return JsonResponse({
+        'connected': result['connected'],
+        'vendor': vendor,
+        'firmware': '',
+        'latency_ms': result['latency_ms'],
+        'error': result['error'],
+    })
+
+
+@login_required
+@operator_required
+def sync_olt_device(request, pk):
+    """Sync PON ports and ONTs from the live OLT device via SSH."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    olt = get_object_or_404(OLT, pk=pk)
+    from .ssh_service import sync_olt_from_device_sync
+    result = sync_olt_from_device_sync(olt)
+
+    if not result['error']:
+        OLT.objects.filter(pk=pk).update(status='online')
+        result['status'] = 'ok'
+    else:
+        OLT.objects.filter(pk=pk).update(status='offline')
+        result['status'] = 'error'
+
+    return JsonResponse(result)
+
+
+@login_required
+@operator_required
+def scan_olt_all_ports(request, pk):
+    """
+    Scan all PON ports on an OLT for unregistered ONTs.
+    Returns JSON grouped by port: [{port_id, port_label, onts: [...]}]
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    olt = get_object_or_404(OLT, pk=pk)
+    from .ssh_service import discover_unregistered_onts_sync
+
+    results = []
+    for pon_port in olt.pon_ports.all().order_by('board', 'port'):
+        found = discover_unregistered_onts_sync(olt, pon_port)
+        if found:
+            results.append({
+                'port_id':    pon_port.pk,
+                'port_label': pon_port.port_label,
+                'board':      pon_port.board,
+                'port':       pon_port.port,
+                'onts':       found,
+            })
+
+    total = sum(len(r['onts']) for r in results)
+    return JsonResponse({'total': total, 'ports': results})
 
 
 @login_required

@@ -122,7 +122,7 @@ CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_CONCURRENCY', 20))
 
 # ── OLT connectivity ──────────────────────────────────────────────────────────
 # Set to False (and configure Redis) when real OLT hardware is available.
-OLT_DEMO_MODE = os.environ.get('OLT_DEMO_MODE', 'true').lower() != 'false'
+OLT_DEMO_MODE = False  # Set to True for development without real OLT hardware
 OLT_SSH_TIMEOUT = int(os.environ.get('OLT_SSH_TIMEOUT', 30))
 OLT_SSH_MAX_CONCURRENT = int(os.environ.get('OLT_SSH_MAX_CONCURRENT', 50))
 

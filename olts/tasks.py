@@ -80,6 +80,46 @@ def poll_all_olts() -> dict:
     return {'dispatched': len(olt_ids)}
 
 
+@shared_task(bind=True, max_retries=0, name='olts.setup_new_olt')
+def setup_new_olt(self, olt_id: int) -> dict:
+    """
+    Fired immediately after a new OLT is saved.
+    1. Tests SSH connectivity → updates OLT.status
+    2. If connected, syncs PON ports + ONTs from the device.
+    Returns a summary dict stored as the task result.
+    """
+    from .models import OLT
+    from .ssh_service import _test_ssh_raw, sync_olt_from_device_sync
+
+    try:
+        olt = OLT.objects.get(pk=olt_id)
+    except OLT.DoesNotExist:
+        return {'error': f'OLT {olt_id} not found', 'connected': False}
+
+    conn = _test_ssh_raw(
+        host=str(olt.ip_address),
+        port=olt.ssh_port,
+        username=olt.username,
+        password=olt.password,
+    )
+
+    new_status = 'online' if conn['connected'] else 'offline'
+    OLT.objects.filter(pk=olt_id).update(status=new_status)
+
+    if not conn['connected']:
+        return {'connected': False, 'error': conn['error'], 'ports_found': 0, 'onts_found': 0}
+
+    sync = sync_olt_from_device_sync(olt)
+    logger.info('setup_new_olt OLT %s: ports=%d onts=%d', olt.name,
+                sync['ports_found'], sync['onts_found'])
+    return {
+        'connected': True,
+        'ports_found': sync['ports_found'],
+        'onts_found': sync['onts_found'],
+        'error': sync.get('error', ''),
+    }
+
+
 @shared_task(bind=True, max_retries=1, default_retry_delay=10,
              name='olts.send_ont_command')
 def send_ont_command(self, olt_id: int, ont_id: int, command: str) -> dict:

@@ -416,10 +416,52 @@ function testConn() {
 }
 {% else %}
 function testConn() {
+  const btn = document.getElementById('testConnBtn');
   const res = document.getElementById('connTestResult');
-  res.style.display = 'block';
-  res.className = 'alert alert-warning py-2 mb-0 mt-2';
-  res.innerHTML = '<i class="fa-solid fa-triangle-exclamation me-1"></i>Save the OLT first, then test the connection from the detail page.';
+
+  const ip       = document.getElementById('id_ip_address')?.value?.trim();
+  const port     = document.getElementById('id_ssh_port')?.value || 22;
+  const username = document.getElementById('id_username')?.value?.trim();
+  const password = document.getElementById('id_password')?.value?.trim();
+  const vendor   = document.getElementById('id_vendor')?.value || 'ZTE';
+
+  if (!ip || !username || !password) {
+    res.style.display = 'block';
+    res.className = 'alert alert-warning py-2 mb-0 mt-2';
+    res.innerHTML = '<i class="fa-solid fa-triangle-exclamation me-1"></i>Fill in IP address, username and password first.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-plug fa-spin me-1"></i>Testing…';
+  res.style.display = 'none';
+
+  const body = new URLSearchParams({ ip_address: ip, ssh_port: port, username, password, vendor });
+  fetch('{% url "olt_test_connection_raw" %}', {
+    method: 'POST',
+    headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  })
+  .then(r => r.json())
+  .then(d => {
+    res.style.display = 'block';
+    if (d.connected) {
+      res.className = 'alert alert-success py-2 mb-0 mt-2';
+      res.innerHTML = `<i class="fa-solid fa-circle-check me-1"></i><strong>Connected!</strong> — Vendor: ${d.vendor} | Firmware: <code>${d.firmware}</code> | Latency: ${d.latency_ms} ms`;
+    } else {
+      res.className = 'alert alert-danger py-2 mb-0 mt-2';
+      res.innerHTML = `<i class="fa-solid fa-circle-xmark me-1"></i><strong>Connection Failed</strong> — ${d.error}`;
+    }
+  })
+  .catch(() => {
+    res.style.display = 'block';
+    res.className = 'alert alert-danger py-2 mb-0 mt-2';
+    res.innerHTML = '<i class="fa-solid fa-circle-xmark me-1"></i>Request failed — check your network.';
+  })
+  .finally(() => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-plug me-1"></i>Test Now';
+  });
 }
 {% endif %}
 

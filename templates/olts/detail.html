@@ -137,12 +137,20 @@
       </div>
     </div>
     <div class="d-flex gap-2 flex-wrap align-items-start">
-      <span class="badge {% if olt.status == 'online' %}bg-success{% elif olt.status == 'offline' %}bg-danger{% else %}bg-warning text-dark{% endif %}" style="font-size:0.8rem;padding:6px 14px;">
+      <span id="oltStatusBadge" class="badge {% if olt.status == 'online' %}bg-success{% elif olt.status == 'offline' %}bg-danger{% else %}bg-warning text-dark{% endif %}" style="font-size:0.8rem;padding:6px 14px;">
         <i class="fa-solid fa-circle me-1" style="font-size:0.55rem;"></i>{{ olt.get_status_display }}
       </span>
       {% if request.user.profile.is_operator %}
       <button class="btn btn-sm btn-outline-light" id="testConnBtn" onclick="testConnection({{ olt.pk }})">
         <i class="fa-solid fa-plug me-1"></i>Test Connection
+      </button>
+      <button class="btn btn-sm" id="syncDeviceBtn" onclick="syncDevice()"
+              style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.5);color:#93c5fd;">
+        <i class="fa-solid fa-rotate me-1"></i>Sync from Device
+      </button>
+      <button class="btn btn-sm" id="scanAllBtn" onclick="scanAllPorts()"
+              style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.5);color:#fde68a;">
+        <i class="fa-solid fa-radar me-1"></i>Scan Unregistered ONTs
       </button>
       <a href="{% url 'olt_edit' olt.pk %}" class="btn btn-sm btn-outline-light">
         <i class="fa-solid fa-pen me-1"></i>Edit
@@ -179,6 +187,18 @@
 
 <div id="sshAlert" class="alert d-none mb-3"></div>
 
+<!-- Setup progress banner — shown only when ?setup_task=<id> is in URL -->
+<div id="setupBanner" class="d-none alert mb-3"
+     style="background:#1e3a5f;border:1px solid rgba(99,179,237,0.3);color:#e0f2fe;border-radius:10px;">
+  <div class="d-flex align-items-center gap-3">
+    <div id="setupSpinner" class="spinner-border spinner-border-sm text-info flex-shrink-0" role="status"></div>
+    <div>
+      <strong id="setupTitle">Testing connection &amp; syncing device…</strong>
+      <div id="setupSubtitle" style="font-size:0.78rem;opacity:0.75;margin-top:2px;">This usually takes 5–30 seconds. You can keep working — the page will update automatically.</div>
+    </div>
+  </div>
+</div>
+
 <!-- ── PON Ports ── -->
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <div>
@@ -191,6 +211,20 @@
     <span><span class="leg-sq" style="background:#f59e0b;"></span> Alarm</span>
     <span><span class="leg-sq" style="background:#e2e8f0;"></span> Free</span>
   </div>
+</div>
+
+<!-- ── Scan Results ── -->
+<div id="scanResults" class="d-none mb-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h5 style="font-weight:700;margin:0;">Unregistered ONTs Found</h5>
+      <div id="scanSummary" style="font-size:0.78rem;color:#64748b;margin-top:2px;"></div>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('scanResults').classList.add('d-none')">
+      <i class="fa-solid fa-xmark me-1"></i>Dismiss
+    </button>
+  </div>
+  <div id="scanResultsBody"></div>
 </div>
 
 {% if pon_ports %}
@@ -253,9 +287,24 @@
 </div>
 
 {% else %}
-<div class="text-center py-5 text-muted">
-  <i class="fa-solid fa-plug fa-3x mb-3 d-block opacity-20"></i>
-  <p class="mb-0">No PON ports configured on this OLT yet.</p>
+<div class="text-center py-5" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
+  <i class="fa-solid fa-circle-nodes fa-3x mb-3 d-block" style="color:#cbd5e1;"></i>
+  <div style="font-size:1rem;font-weight:700;color:#475569;margin-bottom:6px;">No PON Ports Found</div>
+  <div style="font-size:0.82rem;color:#94a3b8;max-width:380px;margin:0 auto 18px;">
+    {% if olt.status == 'online' %}
+      The device is reachable but no ports were auto-discovered yet.
+      Click <strong>Sync from Device</strong> above to pull the port and ONT list directly from the OLT.
+    {% else %}
+      Connect to this OLT first (use <strong>Test Connection</strong>), then
+      click <strong>Sync from Device</strong> to auto-discover ports and ONTs.
+    {% endif %}
+  </div>
+  {% if request.user.profile.is_operator %}
+  <button class="btn btn-sm" onclick="syncDevice()"
+          style="background:#3b82f6;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:600;">
+    <i class="fa-solid fa-rotate me-1"></i>Sync from Device Now
+  </button>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -264,6 +313,70 @@
 {% block extra_js %}
 <script>
 const CSRF = '{{ csrf_token }}';
+
+/* ── Setup task polling (runs when ?setup_task=<id> is in URL) ── */
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  const taskId = params.get('setup_task');
+  if (!taskId) return;
+
+  const banner   = document.getElementById('setupBanner');
+  const spinner  = document.getElementById('setupSpinner');
+  const title    = document.getElementById('setupTitle');
+  const subtitle = document.getElementById('setupSubtitle');
+  banner.classList.remove('d-none');
+
+  let attempts = 0;
+  const maxAttempts = 60; // 60 × 2s = 2 min timeout
+
+  function poll() {
+    attempts++;
+    fetch(`/olts/task/${taskId}/status/`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.status === 'done') {
+          const res = d.result || {};
+          spinner.classList.add('d-none');
+          if (res.connected === false) {
+            banner.style.background = '#3b0a0a';
+            banner.style.borderColor = 'rgba(239,68,68,0.4)';
+            banner.style.color = '#fca5a5';
+            title.textContent = 'Connection failed — device marked offline';
+            subtitle.textContent = res.error || 'Check IP address, credentials, and that SSH is enabled on the device.';
+            updateStatusBadge('offline');
+          } else {
+            banner.style.background = '#052e16';
+            banner.style.borderColor = 'rgba(34,197,94,0.4)';
+            banner.style.color = '#bbf7d0';
+            const p = res.ports_found || 0;
+            const o = res.onts_found  || 0;
+            title.textContent = 'Connected & synced successfully';
+            subtitle.innerHTML = p || o
+              ? `Found <strong>${p}</strong> PON port(s) and <strong>${o}</strong> ONT(s). <a href="" style="color:inherit;font-weight:700;">Reload to see them.</a>`
+              : 'Connection verified. No ONTs found on device yet — try <strong>Sync from Device</strong> after adding PON ports.';
+            updateStatusBadge('online');
+          }
+          // Clean the URL
+          history.replaceState(null, '', window.location.pathname);
+        } else if (d.status === 'pending' && attempts < maxAttempts) {
+          setTimeout(poll, 2000);
+        } else {
+          // Celery not available — fall back to sync inline
+          spinner.classList.add('d-none');
+          banner.style.background = '#1c1917';
+          banner.style.color = '#fed7aa';
+          title.textContent = 'Background worker not available — running sync now…';
+          subtitle.textContent = 'Redis/Celery not running. Syncing directly (may take a moment).';
+          syncDevice();
+        }
+      })
+      .catch(() => {
+        if (attempts < maxAttempts) setTimeout(poll, 3000);
+      });
+  }
+
+  setTimeout(poll, 1500); // small delay so the task is actually queued
+})();
 
 /* ── Render ONT dot grid for each PON panel ── */
 document.querySelectorAll('.ont-dot-grid').forEach(grid => {
@@ -296,6 +409,109 @@ function showSshAlert(html, type) {
   el.innerHTML = html + ' <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
 }
 
+/* ── Sync PON Ports + ONTs from live device ── */
+function syncDevice() {
+  const btn = document.getElementById('syncDeviceBtn');
+  btn.innerHTML = '<i class="fa-solid fa-rotate fa-spin me-1"></i>Syncing...';
+  btn.disabled = true;
+
+  fetch(`/olts/{{ olt.pk }}/sync-device/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'ok') {
+        if (d.ports_found || d.onts_found) {
+          showSshAlert(
+            `<i class="fa-solid fa-circle-check me-1"></i><strong>Sync complete</strong> — ` +
+            `${d.ports_found} new PON port(s) and ${d.onts_found} new ONT(s) added. ` +
+            `<a href="" style="color:inherit;font-weight:700;">Reload page to see them.</a>`,
+            'success'
+          );
+        } else {
+          showSshAlert(
+            `<i class="fa-solid fa-circle-info me-1"></i><strong>Sync complete</strong> — ` +
+            `No new ports or ONTs found on device. All existing records are up to date.`,
+            'info'
+          );
+        }
+        updateStatusBadge('online');
+      } else {
+        showSshAlert(
+          `<i class="fa-solid fa-circle-xmark me-1"></i><strong>Sync failed</strong> — ${d.error}`,
+          'danger'
+        );
+        updateStatusBadge('offline');
+      }
+    })
+    .catch(() => showSshAlert('Sync failed — could not reach server.', 'danger'))
+    .finally(() => {
+      btn.innerHTML = '<i class="fa-solid fa-rotate me-1"></i>Sync from Device';
+      btn.disabled = false;
+    });
+}
+
+/* ── Scan All PON Ports for Unregistered ONTs ── */
+function scanAllPorts() {
+  const btn = document.getElementById('scanAllBtn');
+  btn.innerHTML = '<i class="fa-solid fa-radar fa-spin me-1"></i>Scanning...';
+  btn.disabled = true;
+
+  fetch(`/olts/{{ olt.pk }}/scan-all/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json())
+    .then(data => {
+      const resultsDiv = document.getElementById('scanResults');
+      const bodyDiv    = document.getElementById('scanResultsBody');
+      const summary    = document.getElementById('scanSummary');
+
+      if (data.total === 0) {
+        summary.textContent = 'No unregistered ONTs detected on any PON port.';
+        bodyDiv.innerHTML   = '';
+        resultsDiv.classList.remove('d-none');
+        return;
+      }
+
+      summary.textContent = `${data.total} device${data.total !== 1 ? 's' : ''} detected across ${data.ports.length} port${data.ports.length !== 1 ? 's' : ''}`;
+
+      let html = '';
+      data.ports.forEach(port => {
+        html += `
+          <div class="mb-3">
+            <div style="font-size:0.78rem;font-weight:700;color:#1e293b;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+              <i class="fa-solid fa-circle-nodes" style="color:#3b82f6;"></i>
+              Board ${port.board} / Port ${port.port}
+              <span style="font-size:0.68rem;font-weight:400;color:#94a3b8;">${port.port_label}</span>
+              <span style="background:#fef9c3;color:#92400e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:12px;">${port.onts.length} found</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;">`;
+
+        port.onts.forEach(ont => {
+          const regUrl = `/onts/add/?pon_port=${port.port_id}&serial=${encodeURIComponent(ont.serial)}&olt={{ olt.pk }}`;
+          html += `
+              <div style="background:#fff;border:1.5px solid #e2e8f0;border-left:4px solid #f59e0b;border-radius:10px;padding:12px 16px;min-width:220px;flex:1;max-width:300px;">
+                <div style="font-size:0.78rem;font-weight:700;color:#1e293b;font-family:monospace;">${ont.serial}</div>
+                ${ont.equipment_id ? `<div style="font-size:0.68rem;color:#64748b;margin-top:2px;">${ont.equipment_id}</div>` : ''}
+                <a href="${regUrl}" class="btn btn-sm mt-2"
+                   style="background:#3b82f6;color:#fff;font-size:0.72rem;padding:4px 12px;border-radius:6px;text-decoration:none;">
+                  <i class="fa-solid fa-plus me-1"></i>Register
+                </a>
+              </div>`;
+        });
+
+        html += `</div></div>`;
+      });
+
+      bodyDiv.innerHTML = html;
+      resultsDiv.classList.remove('d-none');
+      resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    })
+    .catch(() => {
+      showSshAlert('<i class="fa-solid fa-circle-xmark me-1"></i>Scan failed — could not reach server.', 'danger');
+    })
+    .finally(() => {
+      btn.innerHTML = '<i class="fa-solid fa-radar me-1"></i>Scan Unregistered ONTs';
+      btn.disabled = false;
+    });
+}
+
 function testConnection(id) {
   const btn = document.getElementById('testConnBtn');
   btn.innerHTML = '<i class="fa-solid fa-plug fa-spin me-1"></i>Testing...';
@@ -307,10 +523,28 @@ function testConnection(id) {
       } else {
         showSshAlert(`<i class="fa-solid fa-circle-xmark me-1"></i><strong>Connection Failed</strong> — ${d.error}`, 'danger');
       }
+      if (d.status_updated) {
+        updateStatusBadge(d.new_status);
+      }
     }).finally(() => {
       btn.innerHTML = '<i class="fa-solid fa-plug me-1"></i>Test Connection';
       btn.disabled = false;
     });
+}
+
+function updateStatusBadge(status) {
+  const badge = document.getElementById('oltStatusBadge');
+  if (!badge) return;
+  const map = {
+    online:  { cls: 'bg-success', label: 'Online' },
+    offline: { cls: 'bg-danger',  label: 'Offline' },
+    warning: { cls: 'bg-warning text-dark', label: 'Warning' },
+    unknown: { cls: 'bg-secondary', label: 'Unknown' },
+  };
+  const s = map[status] || map.unknown;
+  badge.className = `badge ${s.cls}`;
+  badge.style.cssText = 'font-size:0.8rem;padding:6px 14px;';
+  badge.innerHTML = `<i class="fa-solid fa-circle me-1" style="font-size:0.55rem;"></i>${s.label}`;
 }
 </script>
 {% endblock %}
