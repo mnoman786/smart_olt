@@ -48,11 +48,15 @@ def poll_olt_onts(self, olt_id: int) -> dict:
     """Update ONT statuses and signal readings for all ONTs on one OLT."""
     from .models import OLT
     from .ssh_service import poll_all_ont_signals_sync
+    from onts.models import ONT
 
     try:
         olt = OLT.objects.get(pk=olt_id)
     except OLT.DoesNotExist:
         return {'error': f'OLT {olt_id} not found'}
+
+    if not ONT.objects.filter(olt=olt).exists():
+        return {'skipped': 'no registered ONTs'}
 
     try:
         count = poll_all_ont_signals_sync(olt)
@@ -71,12 +75,14 @@ def poll_all_olts() -> dict:
     """
     from .models import OLT
 
-    olt_ids = list(OLT.objects.filter(is_active=True).values_list('id', flat=True))
+    olt_ids = list(
+        OLT.objects.filter(is_deleted=False, status='online').values_list('id', flat=True)
+    )
     for olt_id in olt_ids:
         poll_olt_stats.delay(olt_id)
         poll_olt_onts.delay(olt_id)
 
-    logger.info('Dispatched polling tasks for %d OLTs', len(olt_ids))
+    logger.info('Dispatched polling tasks for %d online OLTs', len(olt_ids))
     return {'dispatched': len(olt_ids)}
 
 

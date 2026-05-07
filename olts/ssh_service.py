@@ -552,8 +552,10 @@ def poll_olt_stats_sync(olt) -> dict:
                                 'uptime', 'firmware_version', 'status'])
 
         from monitoring.models import OLTMetrics
+        from django.utils import timezone as _tz
         OLTMetrics.objects.create(
             olt=olt,
+            timestamp=_tz.now(),
             cpu_usage=data['cpu_usage'],
             memory_usage=data['memory_usage'],
             temperature=data['temperature'],
