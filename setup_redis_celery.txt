@@ -1,0 +1,52 @@
+# Create Celery worker service
+cat > /etc/systemd/system/smartolt-celery.service << 'EOF'
+[Unit]
+Description=SmartOLT Celery Worker
+After=network.target redis.service smartolt.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/smart_olt
+EnvironmentFile=/root/smart_olt/.env
+ExecStart=/root/smart_olt/env/bin/celery -A smartolt worker \
+    --loglevel=info \
+    --concurrency=10
+Restart=always
+RestartSec=5
+StandardOutput=append:/root/smart_olt/logs/celery-worker.log
+StandardError=append:/root/smart_olt/logs/celery-worker.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Create Celery beat service
+cat > /etc/systemd/system/smartolt-celerybeat.service << 'EOF'
+[Unit]
+Description=SmartOLT Celery Beat
+After=network.target redis.service smartolt-celery.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/smart_olt
+EnvironmentFile=/root/smart_olt/.env
+ExecStart=/root/smart_olt/env/bin/celery -A smartolt beat \
+    --loglevel=info \
+    --scheduler django_celery_beat.schedulers:DatabaseScheduler
+Restart=always
+RestartSec=5
+StandardOutput=append:/root/smart_olt/logs/celery-beat.log
+StandardError=append:/root/smart_olt/logs/celery-beat.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Create log dir and start
+mkdir -p /root/smart_olt/logs
+systemctl daemon-reload
+systemctl enable smartolt-celery smartolt-celerybeat
+systemctl start smartolt-celery smartolt-celerybeat
+systemctl status smartolt-celery smartolt-celerybeat
