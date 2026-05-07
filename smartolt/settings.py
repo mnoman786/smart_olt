@@ -98,7 +98,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/accounts/login/'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/olts/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
