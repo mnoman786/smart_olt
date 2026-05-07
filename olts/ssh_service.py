@@ -735,37 +735,76 @@ def discover_unregistered_onts_sync(olt, pon_port) -> list[dict]:
 
 
 def poll_all_ont_signals_sync(olt) -> int:
+    """
+    Update ONT status + optical data for all ONTs on this OLT.
+    Uses SNMP (fast, single UDP sweep) when pysnmp is available;
+    falls back to Telnet per-port polling if not.
+    """
     from onts.models import ONT
     from monitoring.models import SignalHistory
     from django.utils import timezone
 
+    # ── Try SNMP first ────────────────────────────────────────────────────────
+    try:
+        from .snmp_service import get_onu_list_snmp
+        snmp_entries = get_onu_list_snmp(olt)
+        if snmp_entries:
+            return _apply_ont_updates(olt, snmp_entries, timezone)
+    except ImportError:
+        pass  # pysnmp not installed — fall through to Telnet
+    except Exception as exc:
+        logger.warning('SNMP poll failed for OLT %s, falling back to Telnet: %s',
+                       olt.ip_address, exc)
+
+    # ── Telnet fallback ───────────────────────────────────────────────────────
     updated = 0
     for port in olt.pon_ports.all():
         live = poll_port_onts_sync(olt, port.board, 1, port.port)
         for entry in live:
-            try:
-                db_ont = ONT.objects.get(olt=olt, pon_port=port, ont_id=entry['ont_id'])
-            except ONT.DoesNotExist:
-                continue
+            entry['port'] = port.port
+            entry['board'] = port.board
+        updated += _apply_ont_updates(olt, live, timezone)
+    return updated
 
-            db_ont.rx_power     = entry['rx_power']
-            db_ont.tx_power     = entry['tx_power']
-            db_ont.olt_rx_power = entry['olt_rx_power']
-            db_ont.distance     = round(entry['distance_m'] / 1000, 2)
-            db_ont.status       = entry['status']
-            if entry['status'] == 'online':
-                db_ont.last_online = timezone.now()
-            db_ont.save(update_fields=['rx_power', 'tx_power', 'olt_rx_power',
-                                       'distance', 'status', 'last_online'])
 
-            SignalHistory.objects.create(
-                ont=db_ont,
-                timestamp=timezone.now(),
-                rx_power=entry['rx_power'],
-                tx_power=entry['tx_power'],
-                olt_rx_power=entry['olt_rx_power'],
-            )
-            updated += 1
+def _apply_ont_updates(olt, entries: list[dict], timezone) -> int:
+    from onts.models import ONT
+    from monitoring.models import SignalHistory
+    from .models import PONPort
+
+    updated = 0
+    now = timezone.now()
+
+    for entry in entries:
+        board  = entry.get('board', 1)
+        port_n = entry.get('port', 1)
+        ont_id = entry.get('ont_id')
+        if not ont_id:
+            continue
+
+        try:
+            pon_port = PONPort.objects.get(olt=olt, board=board, port=port_n)
+            db_ont   = ONT.objects.get(olt=olt, pon_port=pon_port, ont_id=ont_id)
+        except (PONPort.DoesNotExist, ONT.DoesNotExist):
+            continue
+
+        db_ont.rx_power     = entry.get('rx_power', 0.0)
+        db_ont.tx_power     = entry.get('tx_power', 0.0)
+        db_ont.olt_rx_power = entry.get('olt_rx_power', 0.0)
+        db_ont.status       = entry.get('status', 'offline')
+        if db_ont.status == 'online':
+            db_ont.last_online = now
+        db_ont.save(update_fields=['rx_power', 'tx_power', 'olt_rx_power',
+                                   'status', 'last_online'])
+
+        SignalHistory.objects.create(
+            ont=db_ont,
+            timestamp=now,
+            rx_power=db_ont.rx_power,
+            tx_power=db_ont.tx_power,
+            olt_rx_power=db_ont.olt_rx_power,
+        )
+        updated += 1
 
     return updated
 
