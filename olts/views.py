@@ -104,9 +104,9 @@ def olt_create(request):
                 if task_id:
                     return redirect(f'/olts/{olt.pk}/?setup_task={task_id}')
             else:
-                from .ssh_service import _test_ssh_raw, sync_olt_from_device_sync
-                result = _test_ssh_raw(
-                    host=str(olt.ip_address), port=olt.ssh_port,
+                from .ssh_service import _test_telnet_raw, sync_olt_from_device_sync
+                result = _test_telnet_raw(
+                    host=str(olt.ip_address), port=olt.telnet_port,
                     username=olt.username, password=olt.password,
                 )
                 olt.status = 'online' if result['connected'] else 'offline'
@@ -223,7 +223,7 @@ def olt_test_connection_raw(request):
         return JsonResponse({'error': 'POST required'}, status=405)
 
     ip       = request.POST.get('ip_address', '').strip()
-    port     = int(request.POST.get('ssh_port', 22))
+    port     = int(request.POST.get('telnet_port', 23))
     username = request.POST.get('username', '').strip()
     password = request.POST.get('password', '').strip()
     vendor   = request.POST.get('vendor', 'ZTE').strip().upper()
@@ -231,7 +231,7 @@ def olt_test_connection_raw(request):
     if not ip or not username or not password:
         return JsonResponse({'connected': False, 'error': 'IP, username and password are required.'})
 
-    from .ssh_service import DEMO_MODE, _test_ssh_raw
+    from .ssh_service import DEMO_MODE, _test_telnet_raw
     if DEMO_MODE:
         return JsonResponse({
             'connected': True,
@@ -241,7 +241,7 @@ def olt_test_connection_raw(request):
             'error': '',
         })
 
-    result = _test_ssh_raw(host=ip, port=port, username=username, password=password)
+    result = _test_telnet_raw(host=ip, port=port, username=username, password=password)
     return JsonResponse({
         'connected': result['connected'],
         'vendor': vendor,

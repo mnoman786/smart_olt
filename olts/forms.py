@@ -6,7 +6,7 @@ class OLTForm(forms.ModelForm):
     class Meta:
         model = OLT
         fields = [
-            'name', 'vendor', 'model', 'ip_address', 'telnet_port', 'ssh_port',
+            'name', 'vendor', 'model', 'ip_address', 'telnet_port',
             'username', 'password', 'location', 'latitude', 'longitude',
             'description', 'snmp_community', 'firmware_version', 'is_active',
         ]
@@ -16,7 +16,6 @@ class OLTForm(forms.ModelForm):
             'model': forms.TextInput(attrs={'class': 'form-control'}),
             'ip_address': forms.TextInput(attrs={'class': 'form-control'}),
             'telnet_port': forms.NumberInput(attrs={'class': 'form-control'}),
-            'ssh_port': forms.NumberInput(attrs={'class': 'form-control'}),
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'password': forms.TextInput(attrs={'class': 'form-control'}),
             'location': forms.TextInput(attrs={'class': 'form-control'}),

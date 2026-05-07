@@ -95,16 +95,16 @@ def setup_new_olt(self, olt_id: int) -> dict:
     Returns a summary dict stored as the task result.
     """
     from .models import OLT
-    from .ssh_service import _test_ssh_raw, sync_olt_from_device_sync
+    from .ssh_service import _test_telnet_raw, sync_olt_from_device_sync
 
     try:
         olt = OLT.objects.get(pk=olt_id)
     except OLT.DoesNotExist:
         return {'error': f'OLT {olt_id} not found', 'connected': False}
 
-    conn = _test_ssh_raw(
+    conn = _test_telnet_raw(
         host=str(olt.ip_address),
-        port=olt.ssh_port,
+        port=olt.telnet_port,
         username=olt.username,
         password=olt.password,
     )

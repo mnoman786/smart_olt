@@ -1,11 +1,8 @@
 """
-OLT SSH service — ZTE and Huawei vendor drivers.
+OLT Telnet service — ZTE and Huawei vendor drivers.
 
-Architecture for 1000+ OLTs:
-  - Each Celery task calls connect() → do work → disconnect()
-  - A Semaphore caps global concurrent SSH sessions (OLT_SSH_MAX_CONCURRENT)
-  - Demo mode (OLT_DEMO_MODE=true) returns randomised but realistic data
-    so the app works without real hardware
+All CLI interaction uses Telnet (port 23 by default).
+Paramiko / Netmiko are no longer required.
 """
 from __future__ import annotations
 
@@ -13,43 +10,103 @@ import re
 import logging
 import random
 import threading
-from dataclasses import dataclass, field
+import time
+import telnetlib
 from contextlib import contextmanager
-from typing import Optional
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# Global semaphore — shared across all threads / Celery workers on one machine.
-# For multi-machine deployments use a Redis-backed distributed lock instead.
 _sem = threading.Semaphore(getattr(settings, 'OLT_SSH_MAX_CONCURRENT', 50))
 
-DEMO_MODE: bool = getattr(settings, 'OLT_DEMO_MODE', True)
-SSH_TIMEOUT: int = getattr(settings, 'OLT_SSH_TIMEOUT', 30)
+DEMO_MODE: bool = getattr(settings, 'OLT_DEMO_MODE', False)
+TELNET_TIMEOUT: int = getattr(settings, 'OLT_SSH_TIMEOUT', 30)
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
-@dataclass
 class OLTStats:
-    connected: bool = False
-    firmware: str = ''
-    uptime_seconds: int = 0
-    cpu_usage: float = 0.0
-    memory_usage: float = 0.0
-    temperature: float = 0.0
-    error: str = ''
+    def __init__(self, connected=False, firmware='', uptime_seconds=0,
+                 cpu_usage=0.0, memory_usage=0.0, temperature=0.0, error=''):
+        self.connected = connected
+        self.firmware = firmware
+        self.uptime_seconds = uptime_seconds
+        self.cpu_usage = cpu_usage
+        self.memory_usage = memory_usage
+        self.temperature = temperature
+        self.error = error
+
+    def __dict__(self):
+        return {k: v for k, v in self.__dict__.items()}
 
 
-@dataclass
-class ONTOptical:
-    ont_id: int = 0
-    rx_power: float = 0.0
-    tx_power: float = 0.0
-    olt_rx_power: float = 0.0
-    distance_m: int = 0
-    status: str = 'unknown'
+# ── Telnet session ────────────────────────────────────────────────────────────
+
+class TelnetSession:
+    """
+    Thin wrapper around telnetlib.Telnet that handles OLT login and
+    single-command send/receive cycles.
+    """
+
+    # Patterns that indicate the CLI is ready for the next command
+    _READY = [b'#', b'>']
+
+    def __init__(self, host: str, port: int, username: str, password: str,
+                 timeout: int = 30):
+        self.timeout = timeout
+        self.tn = telnetlib.Telnet(host, port, timeout=timeout)
+        self._login(username, password)
+
+    def _login(self, username: str, password: str):
+        # Some OLTs send a banner first; wait up to timeout for the username prompt
+        self.tn.read_until(b'sername:', timeout=self.timeout)
+        self.tn.write(username.encode('ascii', errors='replace') + b'\r\n')
+        self.tn.read_until(b'assword:', timeout=self.timeout)
+        self.tn.write(password.encode('ascii', errors='replace') + b'\r\n')
+        idx, _, _ = self.tn.expect(self._READY, timeout=self.timeout)
+        if idx < 0:
+            raise ConnectionError(
+                'Login failed — no CLI prompt received after credentials. '
+                'Check username/password and that Telnet is enabled on the device.'
+            )
+
+    def send_command(self, cmd: str, timeout: int = 30) -> str:
+        self.tn.write(cmd.encode('ascii', errors='replace') + b'\r\n')
+        idx, _, data = self.tn.expect(self._READY, timeout=timeout)
+        return data.decode('ascii', errors='ignore')
+
+    def close(self):
+        try:
+            self.tn.close()
+        except Exception:
+            pass
+
+
+# ── Connection context manager ────────────────────────────────────────────────
+
+@contextmanager
+def _telnet_connection(olt):
+    """Acquire semaphore slot, open Telnet session, yield, close."""
+    _sem.acquire()
+    session = None
+    try:
+        session = TelnetSession(
+            host=str(olt.ip_address),
+            port=olt.telnet_port,
+            username=olt.username,
+            password=olt.password,
+            timeout=TELNET_TIMEOUT,
+        )
+        yield session
+    finally:
+        if session:
+            session.close()
+        _sem.release()
+
+
+def _fmt(cmd_template: str, **kwargs) -> str:
+    return cmd_template.format(**kwargs)
 
 
 # ── Vendor parsers ────────────────────────────────────────────────────────────
@@ -80,9 +137,9 @@ class ZTEParser:
 
     @staticmethod
     def parse_uptime(output: str) -> int:
-        """Returns uptime in seconds."""
         m = re.search(
-            r'[Uu]ptime[:\s]+(?:(\d+)\s*[Dd]ay[s]?)?\s*(?:(\d+)\s*[Hh](?:our[s]?)?)?\s*(?:(\d+)\s*[Mm](?:in[a-z]*)?)?\s*(?:(\d+)\s*[Ss])',
+            r'[Uu]ptime[:\s]+(?:(\d+)\s*[Dd]ay[s]?)?\s*(?:(\d+)\s*[Hh](?:our[s]?)?)?\s*'
+            r'(?:(\d+)\s*[Mm](?:in[a-z]*)?)?\s*(?:(\d+)\s*[Ss])',
             output,
         )
         if not m:
@@ -97,13 +154,9 @@ class ZTEParser:
 
     @staticmethod
     def parse_ont_list(output: str) -> list[dict]:
-        """Parse 'show gpon onu state gpon-olt_X/X/X' output."""
         onts = []
         for line in output.splitlines():
-            m = re.match(
-                r'\s*gpon-onu_(\d+/\d+/\d+):(\d+)\s+(\S+)\s+(\S+)',
-                line,
-            )
+            m = re.match(r'\s*gpon-onu_(\d+/\d+/\d+):(\d+)\s+(\S+)\s+(\S+)', line)
             if not m:
                 continue
             port_str, ont_id, admin, phase = m.groups()
@@ -113,7 +166,6 @@ class ZTEParser:
 
     @staticmethod
     def parse_optical_info(output: str) -> dict:
-        """Parse 'show gpon onu optical-info interface gpon-onu_X/X/X:Y'."""
         def _f(pattern: str) -> float:
             m = re.search(pattern, output, re.I)
             return float(m.group(1)) if m else 0.0
@@ -127,15 +179,6 @@ class ZTEParser:
 
     @staticmethod
     def parse_uncfg_list(output: str) -> list[dict]:
-        """
-        Parse 'show gpon onu uncfg gpon-olt_X/X/X' output.
-        Returns list of {serial_number, vendor_info}.
-
-        Sample output:
-          gpon-olt_1/1/1:
-            Index   SN              VendorID  ONU-Type
-            -       ZTEG12345678    ZTEG      ZTE-F660
-        """
         results = []
         for line in output.splitlines():
             m = re.match(r'\s*-\s+([A-F0-9a-z]{12,16})\s+(\S+)\s+(\S+)', line)
@@ -149,13 +192,6 @@ class ZTEParser:
 
     @staticmethod
     def parse_uncfg_all(output: str) -> list[dict]:
-        """
-        Parse 'show gpon onu uncfg' (global, no port specified).
-        Returns list of {serial_number, vendor_info, board, port}.
-        Sample:
-          gpon-olt_1/1/1:
-            -  ZTEG12345678  ZTEG  ZTE-F660
-        """
         results = []
         current_board, current_port = 1, 1
         for line in output.splitlines():
@@ -176,11 +212,6 @@ class ZTEParser:
 
     @staticmethod
     def parse_port_list(output: str) -> list[tuple]:
-        """
-        Parse 'show interface gpon-olt' output.
-        Returns list of (board, port) tuples.
-        Sample: Interface: gpon-olt_1/1/1
-        """
         ports = []
         for m in re.finditer(r'gpon-olt_(\d+)/\d+/(\d+)', output):
             board, port = int(m.group(1)), int(m.group(2))
@@ -190,13 +221,6 @@ class ZTEParser:
 
     @staticmethod
     def parse_ont_detail(output: str) -> list[dict]:
-        """
-        Parse 'show gpon onu detail-info gpon-olt_X/X/X' output.
-        Returns list of {ont_id, serial_number, status, name}.
-        Sample:  ONU Index  : gpon-onu_1/1/1:1
-                 SN         : ZTEG12345678
-                 Run State  : working
-        """
         results = []
         current: dict = {}
         for line in output.splitlines():
@@ -243,7 +267,8 @@ class HuaweiParser:
     @staticmethod
     def parse_uptime(output: str) -> int:
         m = re.search(
-            r'(?:(\d+)\s*day[s]?)?\s*(?:(\d+)\s*hour[s]?)?\s*(?:(\d+)\s*minute[s]?)?\s*(?:(\d+)\s*second[s]?)?',
+            r'(?:(\d+)\s*day[s]?)?\s*(?:(\d+)\s*hour[s]?)?\s*'
+            r'(?:(\d+)\s*minute[s]?)?\s*(?:(\d+)\s*second[s]?)?',
             output, re.I,
         )
         if not m or not any(m.groups()):
@@ -258,7 +283,6 @@ class HuaweiParser:
 
     @staticmethod
     def parse_ont_list(output: str) -> list[dict]:
-        """Parse 'display ont info' output."""
         onts = []
         for line in output.splitlines():
             m = re.match(
@@ -268,16 +292,11 @@ class HuaweiParser:
             if not m:
                 continue
             port_str, ont_id, _, run_state = m.groups()
-            onts.append({
-                'port': port_str,
-                'ont_id': int(ont_id),
-                'status': run_state.lower(),
-            })
+            onts.append({'port': port_str, 'ont_id': int(ont_id), 'status': run_state.lower()})
         return onts
 
     @staticmethod
     def parse_optical_info(output: str) -> dict:
-        """Parse 'display ont optical-info' output."""
         def _f(pattern: str) -> float:
             m = re.search(pattern, output, re.I)
             return float(m.group(1)) if m else 0.0
@@ -291,33 +310,15 @@ class HuaweiParser:
 
     @staticmethod
     def parse_uncfg_list(output: str) -> list[dict]:
-        """
-        Parse 'display ont autofind X X' output.
-        Returns list of {serial_number, vendor_info}.
-
-        Sample output:
-          Port   ONT   SN                Password  Loid  Checkcode  Ontlinestatus
-          0/1    -     4857544312345678  -         -     -          online
-        """
         results = []
         for line in output.splitlines():
             m = re.match(r'\s*[\d/]+\s+-\s+([A-Fa-f0-9]{16})\s+', line)
             if m:
-                serial = m.group(1).upper()
-                results.append({
-                    'serial_number': serial,
-                    'vendor_info': 'Huawei Auto-Found',
-                })
+                results.append({'serial_number': m.group(1).upper(), 'vendor_info': 'Huawei Auto-Found'})
         return results
 
     @staticmethod
     def parse_port_list(output: str) -> list[tuple]:
-        """
-        Parse 'display board 0' output.
-        Returns list of (board, port) tuples.
-        Huawei boards are identified by slot number; each GPON board has ports 0-7 or 0-15.
-        Sample: 0    H805GPFD    Normal   ...   (8 ports)
-        """
         ports = []
         for line in output.splitlines():
             m = re.match(r'\s*(\d+)\s+\S+GPFD\S*\s+Normal', line, re.I)
@@ -329,10 +330,6 @@ class HuaweiParser:
 
     @staticmethod
     def parse_ont_detail(output: str) -> list[dict]:
-        """
-        Parse 'display ont info X X all' output.
-        Returns list of {ont_id, serial_number, status, name}.
-        """
         results = []
         current: dict = {}
         for line in output.splitlines():
@@ -359,73 +356,35 @@ class HuaweiParser:
 
 _VENDOR_COMMANDS = {
     'ZTE': {
-        'version':     'show version',
-        'cpu':         'show cpu',
-        'memory':      'show memory',
-        'temperature': 'show temperature',
-        'port_list':   'show interface gpon-olt',
-        'ont_list':    'show gpon onu state gpon-olt_{board}/{port_b}/{port}',
-        'ont_detail':  'show gpon onu detail-info gpon-olt_{board}/{port_b}/{port}',
-        'optical':     'show gpon onu optical-info interface gpon-onu_{board}/{port_b}/{port}:{ont_id}',
-        'reboot':      'interface gpon-onu_{board}/{port_b}/{port}:{ont_id}\nreboot\nexit',
+        'version':       'show version',
+        'cpu':           'show cpu',
+        'memory':        'show memory',
+        'temperature':   'show temperature',
+        'port_list':     'show interface gpon-olt',
+        'ont_list':      'show gpon onu state gpon-olt_{board}/{port_b}/{port}',
+        'ont_detail':    'show gpon onu detail-info gpon-olt_{board}/{port_b}/{port}',
+        'optical':       'show gpon onu optical-info interface gpon-onu_{board}/{port_b}/{port}:{ont_id}',
+        'reboot':        'interface gpon-onu_{board}/{port_b}/{port}:{ont_id}\nreboot\nexit',
         'factory_reset': 'interface gpon-onu_{board}/{port_b}/{port}:{ont_id}\nfactory-reset\nexit',
-        'uncfg_list':  'show gpon onu uncfg gpon-olt_{board}/{port_b}/{port}',
-        'uncfg_all':   'show gpon onu uncfg',
+        'uncfg_list':    'show gpon onu uncfg gpon-olt_{board}/{port_b}/{port}',
+        'uncfg_all':     'show gpon onu uncfg',
     },
     'HUAWEI': {
-        'version':     'display version',
-        'cpu':         'display cpu-usage',
-        'memory':      'display memory-usage',
-        'temperature': 'display temperature 0',
-        'port_list':   'display board 0',
-        'ont_list':    'display ont info {board} {port} all',
-        'ont_detail':  'display ont info {board} {port} all',
-        'optical':     'display ont optical-info {board} {port} {ont_id}',
-        'reboot':      'interface gpon {board}/{port}\nont reset {ont_id}\nquit',
+        'version':       'display version',
+        'cpu':           'display cpu-usage',
+        'memory':        'display memory-usage',
+        'temperature':   'display temperature 0',
+        'port_list':     'display board 0',
+        'ont_list':      'display ont info {board} {port} all',
+        'ont_detail':    'display ont info {board} {port} all',
+        'optical':       'display ont optical-info {board} {port} {ont_id}',
+        'reboot':        'interface gpon {board}/{port}\nont reset {ont_id}\nquit',
         'factory_reset': 'interface gpon {board}/{port}\nont factory-reset {ont_id}\nquit',
-        'uncfg_list':  'display ont autofind {board} {port}',
+        'uncfg_list':    'display ont autofind {board} {port}',
     },
 }
 
 _PARSERS = {'ZTE': ZTEParser, 'HUAWEI': HuaweiParser}
-
-_DEVICE_TYPE = {
-    'ZTE': 'generic_termserver',
-    'HUAWEI': 'huawei_vrp',
-}
-
-
-# ── Connection context manager ────────────────────────────────────────────────
-
-@contextmanager
-def _ssh_connection(olt):
-    """Acquire semaphore slot, open Netmiko connection, yield, close."""
-    _sem.acquire()
-    conn = None
-    try:
-        from netmiko import ConnectHandler
-        conn = ConnectHandler(
-            device_type=_DEVICE_TYPE.get(olt.vendor, 'generic_termserver'),
-            host=str(olt.ip_address),
-            port=olt.ssh_port,
-            username=olt.username,
-            password=olt.password,
-            timeout=SSH_TIMEOUT,
-            session_timeout=SSH_TIMEOUT + 30,
-            fast_cli=False,
-        )
-        yield conn
-    finally:
-        if conn:
-            try:
-                conn.disconnect()
-            except Exception:
-                pass
-        _sem.release()
-
-
-def _fmt(cmd_template: str, **kwargs) -> str:
-    return cmd_template.format(**kwargs)
 
 
 # ── Demo-mode helpers ─────────────────────────────────────────────────────────
@@ -455,55 +414,36 @@ def _demo_optical(ont_id: int) -> dict:
 def _demo_ont_command(command: str) -> dict:
     return {
         'success': True,
-        'message': f'[DEMO] {command.replace("_", " ").title()} command simulated — no real OLT connected.',
+        'message': f'[DEMO] {command.replace("_", " ").title()} command simulated.',
         'output': '',
     }
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def _test_ssh_raw(host: str, port: int, username: str, password: str) -> dict:
+def _test_telnet_raw(host: str, port: int, username: str, password: str) -> dict:
     """
-    Pure paramiko connectivity check — no prompt detection, works with any SSH server.
+    Open a Telnet session, log in, then close.
     Returns {connected, latency_ms, error}.
     """
-    import time
-    import paramiko
     t0 = time.monotonic()
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
-        client.connect(
-            hostname=host,
-            port=port,
-            username=username,
-            password=password,
-            timeout=SSH_TIMEOUT,
-            auth_timeout=SSH_TIMEOUT,
-            look_for_keys=False,
-            allow_agent=False,
-        )
+        session = TelnetSession(host=host, port=port, username=username,
+                                password=password, timeout=TELNET_TIMEOUT)
         latency_ms = int((time.monotonic() - t0) * 1000)
-        client.close()
+        session.close()
         return {'connected': True, 'latency_ms': latency_ms, 'error': ''}
-    except paramiko.AuthenticationException:
-        return {'connected': False, 'latency_ms': 0, 'error': 'Authentication failed — wrong username or password.'}
-    except paramiko.ssh_exception.NoValidConnectionsError:
-        return {'connected': False, 'latency_ms': 0, 'error': f'Cannot reach {host}:{port} — host unreachable or port closed.'}
+    except ConnectionError as exc:
+        return {'connected': False, 'latency_ms': 0, 'error': str(exc)}
+    except OSError as exc:
+        return {'connected': False, 'latency_ms': 0,
+                'error': f'Cannot reach {host}:{port} — {exc}'}
     except Exception as exc:
         return {'connected': False, 'latency_ms': 0, 'error': str(exc)}
-    finally:
-        try:
-            client.close()
-        except Exception:
-            pass
 
 
 def test_connection(olt) -> dict:
-    """
-    Test SSH connectivity to an OLT.
-    Returns dict: {connected, vendor, firmware, latency_ms, error}
-    """
+    """Test Telnet connectivity to an OLT."""
     if DEMO_MODE:
         return {
             'connected': True,
@@ -513,9 +453,9 @@ def test_connection(olt) -> dict:
             'error': '',
         }
 
-    result = _test_ssh_raw(
+    result = _test_telnet_raw(
         host=str(olt.ip_address),
-        port=olt.ssh_port,
+        port=olt.telnet_port,
         username=olt.username,
         password=olt.password,
     )
@@ -529,11 +469,6 @@ def test_connection(olt) -> dict:
 
 
 def poll_olt_stats_sync(olt) -> dict:
-    """
-    Poll OLT for CPU / memory / temperature / uptime.
-    Updates the OLT model in-place and returns the stats dict.
-    Called synchronously when Celery is unavailable.
-    """
     if DEMO_MODE:
         data = _demo_olt_stats(olt)
     else:
@@ -569,14 +504,14 @@ def poll_olt_stats_sync(olt) -> dict:
 
 def _fetch_olt_stats(olt) -> dict:
     try:
-        with _ssh_connection(olt) as conn:
+        with _telnet_connection(olt) as conn:
             cmds = _VENDOR_COMMANDS[olt.vendor]
             parser = _PARSERS[olt.vendor]
 
-            v_out = conn.send_command(cmds['version'], read_timeout=SSH_TIMEOUT)
-            c_out = conn.send_command(cmds['cpu'], read_timeout=SSH_TIMEOUT)
-            m_out = conn.send_command(cmds['memory'], read_timeout=SSH_TIMEOUT)
-            t_out = conn.send_command(cmds['temperature'], read_timeout=SSH_TIMEOUT)
+            v_out = conn.send_command(cmds['version'], timeout=TELNET_TIMEOUT)
+            c_out = conn.send_command(cmds['cpu'],     timeout=TELNET_TIMEOUT)
+            m_out = conn.send_command(cmds['memory'],  timeout=TELNET_TIMEOUT)
+            t_out = conn.send_command(cmds['temperature'], timeout=TELNET_TIMEOUT)
 
             return {
                 'connected': True,
@@ -589,14 +524,14 @@ def _fetch_olt_stats(olt) -> dict:
             }
     except Exception as exc:
         logger.error('poll_olt_stats OLT %s: %s', olt.ip_address, exc)
-        return OLTStats(connected=False, error=str(exc)).__dict__
+        return {
+            'connected': False, 'firmware': '', 'uptime_seconds': 0,
+            'cpu_usage': 0.0, 'memory_usage': 0.0, 'temperature': 0.0,
+            'error': str(exc),
+        }
 
 
 def poll_port_onts_sync(olt, board: int, port_b: int, port: int) -> list[dict]:
-    """
-    Fetch live ONT list + optical power for one PON port.
-    Returns list of dicts: {ont_id, status, rx_power, tx_power, olt_rx_power, distance_m}
-    """
     if DEMO_MODE:
         return [
             {**_demo_optical(i), 'ont_id': i,
@@ -605,12 +540,12 @@ def poll_port_onts_sync(olt, board: int, port_b: int, port: int) -> list[dict]:
         ]
 
     try:
-        with _ssh_connection(olt) as conn:
+        with _telnet_connection(olt) as conn:
             cmds = _VENDOR_COMMANDS[olt.vendor]
             parser = _PARSERS[olt.vendor]
 
             list_cmd = _fmt(cmds['ont_list'], board=board, port_b=port_b, port=port)
-            list_out = conn.send_command(list_cmd, read_timeout=SSH_TIMEOUT)
+            list_out = conn.send_command(list_cmd, timeout=TELNET_TIMEOUT)
             onts = parser.parse_ont_list(list_out)
 
             results = []
@@ -619,7 +554,7 @@ def poll_port_onts_sync(olt, board: int, port_b: int, port: int) -> list[dict]:
                     cmds['optical'],
                     board=board, port_b=port_b, port=port, ont_id=ont['ont_id'],
                 )
-                optical_out = conn.send_command(optical_cmd, read_timeout=SSH_TIMEOUT)
+                optical_out = conn.send_command(optical_cmd, timeout=TELNET_TIMEOUT)
                 optical = parser.parse_optical_info(optical_out)
                 results.append({**ont, **optical})
             return results
@@ -630,10 +565,6 @@ def poll_port_onts_sync(olt, board: int, port_b: int, port: int) -> list[dict]:
 
 
 def send_ont_command_sync(ont, command: str) -> dict:
-    """
-    Send a command ('reboot' or 'factory_reset') to a single ONT via SSH.
-    `ont` is an ONT model instance with olt, pon_port FK populated.
-    """
     if DEMO_MODE:
         return _demo_ont_command(command)
 
@@ -641,18 +572,18 @@ def send_ont_command_sync(ont, command: str) -> dict:
     if not ont.pon_port:
         return {'success': False, 'message': 'ONT has no PON port assigned.', 'output': ''}
 
-    board = ont.pon_port.board
-    port_b = 1   # ZTE uses board/slot/port — slot defaults to 1
-    port = ont.pon_port.port
+    board  = ont.pon_port.board
+    port_b = 1
+    port   = ont.pon_port.port
     ont_id = ont.ont_id
 
     try:
-        with _ssh_connection(olt) as conn:
+        with _telnet_connection(olt) as conn:
             cmds = _VENDOR_COMMANDS[olt.vendor]
             cmd = _fmt(cmds[command], board=board, port_b=port_b, port=port, ont_id=ont_id)
             output = ''
             for line in cmd.splitlines():
-                output += conn.send_command_timing(line, read_timeout=SSH_TIMEOUT)
+                output += conn.send_command(line, timeout=TELNET_TIMEOUT)
             return {
                 'success': True,
                 'message': f'{command.replace("_", " ").title()} sent to ONT {ont.name}.',
@@ -664,22 +595,13 @@ def send_ont_command_sync(ont, command: str) -> dict:
 
 
 def discover_unregistered_onts_sync(olt, pon_port) -> list[dict]:
-    """
-    Query the OLT for ONTs that are physically connected on a PON port
-    but not yet registered/provisioned. Saves results to DiscoveredONT table
-    (excluding serials already in the ONT table). Returns list of dicts.
-    """
     from onts.models import ONT
     from .models import DiscoveredONT
 
     if DEMO_MODE:
-        # Use port PK as seed so the same port always "discovers" the same
-        # fake devices — simulates real hardware where physically-connected
-        # ONTs don't change between scans.
         rng = random.Random(pon_port.pk * 31337)
-        fake_prefix = 'ZTEG' if olt.vendor == 'ZTE' else '48575443'
+        fake_prefix  = 'ZTEG' if olt.vendor == 'ZTE' else '48575443'
         device_model = 'ZTE-F660' if olt.vendor == 'ZTE' else 'Huawei EG8145V5'
-        # Generate a fixed set of 3 serials tied to this port
         stable_serials = [
             f'{fake_prefix}{rng.randint(10000000, 99999999):08d}' for _ in range(3)
         ]
@@ -689,27 +611,25 @@ def discover_unregistered_onts_sync(olt, pon_port) -> list[dict]:
             for s in stable_serials if s not in registered
         ]
     else:
-        board = pon_port.board
+        board  = pon_port.board
         port_b = 1
-        port = pon_port.port
-        cmds = _VENDOR_COMMANDS[olt.vendor]
+        port   = pon_port.port
+        cmds   = _VENDOR_COMMANDS[olt.vendor]
         parser = _PARSERS[olt.vendor]
 
         try:
-            with _ssh_connection(olt) as conn:
-                cmd = _fmt(cmds['uncfg_list'], board=board, port_b=port_b, port=port)
-                output = conn.send_command(cmd, read_timeout=SSH_TIMEOUT)
-                found = parser.parse_uncfg_list(output)
+            with _telnet_connection(olt) as conn:
+                cmd    = _fmt(cmds['uncfg_list'], board=board, port_b=port_b, port=port)
+                output = conn.send_command(cmd, timeout=TELNET_TIMEOUT)
+                found  = parser.parse_uncfg_list(output)
         except Exception as exc:
             logger.error('discover_unregistered_onts OLT %s port %s/%s: %s',
                          olt.ip_address, board, port, exc)
             return []
 
-    # Filter out serials already registered as ONTs
-    registered = set(ONT.objects.filter(pon_port=pon_port).values_list('serial_number', flat=True))
+    registered   = set(ONT.objects.filter(pon_port=pon_port).values_list('serial_number', flat=True))
     unregistered = [f for f in found if f['serial_number'] not in registered]
 
-    # Persist to DiscoveredONT — upsert by serial+port
     DiscoveredONT.objects.filter(pon_port=pon_port).delete()
     for entry in unregistered:
         DiscoveredONT.objects.update_or_create(
@@ -722,10 +642,6 @@ def discover_unregistered_onts_sync(olt, pon_port) -> list[dict]:
 
 
 def poll_all_ont_signals_sync(olt) -> int:
-    """
-    Walk every PON port on the OLT, fetch optical data for all ONTs,
-    and update the DB. Returns the number of ONTs updated.
-    """
     from onts.models import ONT
     from monitoring.models import SignalHistory
     from django.utils import timezone
@@ -739,11 +655,11 @@ def poll_all_ont_signals_sync(olt) -> int:
             except ONT.DoesNotExist:
                 continue
 
-            db_ont.rx_power = entry['rx_power']
-            db_ont.tx_power = entry['tx_power']
+            db_ont.rx_power     = entry['rx_power']
+            db_ont.tx_power     = entry['tx_power']
             db_ont.olt_rx_power = entry['olt_rx_power']
-            db_ont.distance = round(entry['distance_m'] / 1000, 2)
-            db_ont.status = entry['status']
+            db_ont.distance     = round(entry['distance_m'] / 1000, 2)
+            db_ont.status       = entry['status']
             if entry['status'] == 'online':
                 db_ont.last_online = timezone.now()
             db_ont.save(update_fields=['rx_power', 'tx_power', 'olt_rx_power',
@@ -751,6 +667,7 @@ def poll_all_ont_signals_sync(olt) -> int:
 
             SignalHistory.objects.create(
                 ont=db_ont,
+                timestamp=timezone.now(),
                 rx_power=entry['rx_power'],
                 tx_power=entry['tx_power'],
                 olt_rx_power=entry['olt_rx_power'],
@@ -761,56 +678,47 @@ def poll_all_ont_signals_sync(olt) -> int:
 
 
 def sync_olt_from_device_sync(olt) -> dict:
-    """
-    Auto-discover PON ports and registered ONTs from a live OLT via SSH.
-    Creates PONPort and ONT records in the DB for anything not already present.
-    Returns a summary dict: {ports_found, onts_found, error}
-    """
     from .models import PONPort
     from onts.models import ONT
 
     if DEMO_MODE:
         return {'ports_found': 0, 'onts_found': 0, 'error': 'demo mode — no real device'}
 
-    cmds = _VENDOR_COMMANDS.get(olt.vendor, {})
+    cmds   = _VENDOR_COMMANDS.get(olt.vendor, {})
     parser = _PARSERS.get(olt.vendor)
     if not parser or not cmds:
         return {'ports_found': 0, 'onts_found': 0, 'error': f'Unsupported vendor: {olt.vendor}'}
 
     ports_found = 0
-    onts_found = 0
-    error = ''
+    onts_found  = 0
+    error       = ''
 
     try:
-        with _ssh_connection(olt) as conn:
-            # ── Step 1: discover PON ports ────────────────────────────────────
-            port_list_cmd = cmds.get('port_list', '')
+        with _telnet_connection(olt) as conn:
             port_tuples: list[tuple] = []
+            port_list_cmd = cmds.get('port_list', '')
             if port_list_cmd:
                 try:
-                    out = conn.send_command(port_list_cmd, read_timeout=SSH_TIMEOUT)
+                    out = conn.send_command(port_list_cmd, timeout=TELNET_TIMEOUT)
                     port_tuples = parser.parse_port_list(out)
                 except Exception:
                     pass
 
-            # Fallback: probe board 1, ports 1-16 (ZTE style)
             if not port_tuples:
                 port_tuples = [(1, p) for p in range(1, 17)]
 
-            # ── Step 2: for each port, try to fetch registered ONTs ──────────
             for board, port_num in port_tuples:
-                ont_detail_cmd = _fmt(cmds.get('ont_detail', ''), board=board, port_b=1, port=port_num)
+                ont_detail_cmd = _fmt(cmds.get('ont_detail', ''),
+                                      board=board, port_b=1, port=port_num)
                 try:
-                    detail_out = conn.send_command(ont_detail_cmd, read_timeout=SSH_TIMEOUT)
+                    detail_out  = conn.send_command(ont_detail_cmd, timeout=TELNET_TIMEOUT)
                     ont_entries = parser.parse_ont_detail(detail_out)
                 except Exception:
                     ont_entries = []
 
-                # If nothing on this port, skip creating it (avoids ghost ports)
                 if not ont_entries:
                     continue
 
-                # Create PONPort if missing
                 pon_port, created = PONPort.objects.get_or_create(
                     olt=olt, board=board, port=port_num,
                     defaults={'technology': 'GPON', 'max_onts': 128},
@@ -818,12 +726,9 @@ def sync_olt_from_device_sync(olt) -> dict:
                 if created:
                     ports_found += 1
 
-                # Create ONT stubs
                 for entry in ont_entries:
                     _, ont_created = ONT.objects.get_or_create(
-                        olt=olt,
-                        pon_port=pon_port,
-                        ont_id=entry['ont_id'],
+                        olt=olt, pon_port=pon_port, ont_id=entry['ont_id'],
                         defaults={
                             'name': entry.get('name') or f"ONT-{entry['ont_id']}",
                             'serial_number': entry.get('serial_number', ''),
@@ -841,14 +746,8 @@ def sync_olt_from_device_sync(olt) -> dict:
 
 
 def scan_all_uncfg_sync(olt) -> list[dict]:
-    """
-    Run a single global command to get ALL unregistered ONTs across every
-    PON port on the OLT in one SSH session.
-    Returns list of {serial_number, vendor_info, board, port}.
-    Falls back to per-port scan if vendor has no global command.
-    """
     if DEMO_MODE:
-        rng = random.Random(olt.pk * 99991)
+        rng    = random.Random(olt.pk * 99991)
         prefix = 'ZTEG' if olt.vendor == 'ZTE' else 'HWTC'
         return [
             {'serial_number': f'{prefix}{rng.randint(10000000,99999999):08d}',
@@ -862,18 +761,16 @@ def scan_all_uncfg_sync(olt) -> list[dict]:
     if not cmds or not parser:
         return []
 
-    # ZTE supports a global uncfg command
     global_cmd = cmds.get('uncfg_all')
     if global_cmd and hasattr(parser, 'parse_uncfg_all'):
         try:
-            with _ssh_connection(olt) as conn:
-                out = conn.send_command(global_cmd, read_timeout=SSH_TIMEOUT)
+            with _telnet_connection(olt) as conn:
+                out = conn.send_command(global_cmd, timeout=TELNET_TIMEOUT)
                 return parser.parse_uncfg_all(out)
         except Exception as exc:
             logger.error('scan_all_uncfg OLT %s: %s', olt.ip_address, exc)
             return []
 
-    # Fallback: per-port scan across all DB ports
     results = []
     for pon_port in olt.pon_ports.all():
         found = discover_unregistered_onts_sync(olt, pon_port)
