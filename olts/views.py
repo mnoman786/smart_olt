@@ -36,7 +36,7 @@ def olt_list(request):
 
 
 def _olt_qs():
-    return OLT.objects.annotate(
+    return OLT.objects.filter(is_deleted=False).annotate(
         ont_count=Count('onts'),
         online_ont_count=Count('onts', filter=Q(onts__status='online')),
         offline_ont_count=Count(
@@ -129,11 +129,10 @@ def olt_edit(request, pk):
 @login_required
 @admin_required
 def olt_delete(request, pk):
-    olt = get_object_or_404(OLT, pk=pk)
+    olt = get_object_or_404(OLT, pk=pk, is_deleted=False)
     if request.method == 'POST':
-        name = olt.name
-        olt.delete()
-        messages.success(request, f'OLT "{name}" deleted.')
+        olt.soft_delete()
+        messages.success(request, f'OLT "{olt.name}" deleted.')
         return redirect('olt_list')
     return render(request, 'olts/confirm_delete.html', {'olt': olt})
 

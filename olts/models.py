@@ -34,8 +34,17 @@ class OLT(models.Model):
     memory_usage = models.FloatField(default=0)
     temperature = models.FloatField(default=0)
     is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def soft_delete(self):
+        from django.utils import timezone
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.status = 'offline'
+        self.save(update_fields=['is_deleted', 'deleted_at', 'status'])
 
     def __str__(self):
         return f"{self.name} ({self.vendor} {self.model})"
