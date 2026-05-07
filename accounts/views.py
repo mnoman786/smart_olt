@@ -108,6 +108,8 @@ def user_create(request):
             profile = user.profile
             profile.phone = profile_form.cleaned_data.get('phone', '')
             profile.organization = profile_form.cleaned_data.get('organization', '')
+            if 'olt_quota' in profile_form.cleaned_data:
+                profile.olt_quota = profile_form.cleaned_data['olt_quota']
             profile.save()
             messages.success(request, f'User {user.username} created successfully.')
             return redirect('users_list')

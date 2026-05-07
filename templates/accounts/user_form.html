@@ -95,14 +95,16 @@
               <label class="form-label fw-medium">Organization</label>
               {{ profile_form.organization }}
             </div>
-            {% if action == 'Edit' and not target_user.is_superuser %}
+            {% if action == 'Create' or action == 'Edit' and not target_user.is_superuser %}
             <div class="col-md-6">
               <label class="form-label fw-medium">OLT Quota</label>
               {{ profile_form.olt_quota }}
+              {% if action == 'Edit' %}
               <div class="form-text">
                 Currently using <strong>{{ target_user.profile.olt_used }}</strong> of
                 <strong>{{ target_user.profile.olt_quota }}</strong> OLTs.
               </div>
+              {% endif %}
             </div>
             {% endif %}
           </div>
