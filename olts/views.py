@@ -72,17 +72,39 @@ def olt_create(request):
             olt.status = 'unknown'
             olt.save()
 
-            task_id = None
-            try:
-                from .tasks import setup_new_olt
-                task = setup_new_olt.delay(olt.pk)
-                task_id = task.id
-            except Exception:
-                pass
+            from django.conf import settings as dj_settings
+            if dj_settings.USE_CELERY:
+                task_id = None
+                try:
+                    from .tasks import setup_new_olt
+                    task = setup_new_olt.delay(olt.pk)
+                    task_id = task.id
+                except Exception:
+                    pass
+                messages.info(request, f'OLT "{olt.name}" saved. Testing connection and syncing in the background…')
+                if task_id:
+                    return redirect(f'/olts/{olt.pk}/?setup_task={task_id}')
+            else:
+                from .ssh_service import _test_ssh_raw, sync_olt_from_device_sync
+                result = _test_ssh_raw(
+                    host=str(olt.ip_address), port=olt.ssh_port,
+                    username=olt.username, password=olt.password,
+                )
+                olt.status = 'online' if result['connected'] else 'offline'
+                olt.save(update_fields=['status'])
+                if result['connected']:
+                    sync = sync_olt_from_device_sync(olt)
+                    messages.success(request,
+                        f'OLT "{olt.name}" connected. '
+                        f'Found {sync["ports_found"]} port(s) and {sync["onts_found"]} ONT(s).'
+                        if sync['ports_found'] or sync['onts_found'] else
+                        f'OLT "{olt.name}" connected. No ONTs found yet — use Sync from Device.'
+                    )
+                else:
+                    messages.warning(request,
+                        f'OLT "{olt.name}" saved but connection failed: {result["error"]}'
+                    )
 
-            messages.info(request, f'OLT "{olt.name}" saved. Testing connection and syncing data in the background…')
-            if task_id:
-                return redirect(f'/olts/{olt.pk}/?setup_task={task_id}')
             return redirect('olt_detail', pk=olt.pk)
     else:
         form = OLTForm()
@@ -137,15 +159,18 @@ def olt_refresh(request, pk):
 
     olt = get_object_or_404(OLT, pk=pk)
 
-    try:
-        from .tasks import poll_olt_stats
-        task = poll_olt_stats.delay(olt.pk)
-        return JsonResponse({'status': 'queued', 'task_id': task.id})
-    except Exception:
-        # Celery not running — execute synchronously (demo / dev mode)
-        from .ssh_service import poll_olt_stats_sync
-        result = poll_olt_stats_sync(olt)
-        return JsonResponse({'status': 'ok', **result})
+    from django.conf import settings as dj_settings
+    if dj_settings.USE_CELERY:
+        try:
+            from .tasks import poll_olt_stats
+            task = poll_olt_stats.delay(olt.pk)
+            return JsonResponse({'status': 'queued', 'task_id': task.id})
+        except Exception:
+            pass
+
+    from .ssh_service import poll_olt_stats_sync
+    result = poll_olt_stats_sync(olt)
+    return JsonResponse({'status': 'ok', **result})
 
 
 @login_required

@@ -130,8 +130,11 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_CONCURRENCY', 20))
 
 # ── OLT connectivity ──────────────────────────────────────────────────────────
-# Set to False (and configure Redis) when real OLT hardware is available.
-OLT_DEMO_MODE = False  # Set to True for development without real OLT hardware
+OLT_DEMO_MODE = False
 OLT_SSH_TIMEOUT = int(os.environ.get('OLT_SSH_TIMEOUT', 30))
 OLT_SSH_MAX_CONCURRENT = int(os.environ.get('OLT_SSH_MAX_CONCURRENT', 50))
+
+# ── Celery toggle ─────────────────────────────────────────────────────────────
+# Set USE_CELERY=False in .env to run all tasks synchronously (no Redis needed)
+USE_CELERY = os.environ.get('USE_CELERY', 'True').lower() not in ('false', '0', 'no')
 
