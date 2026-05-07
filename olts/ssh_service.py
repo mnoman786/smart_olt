@@ -144,13 +144,23 @@ class TelnetSession:
                         f'{after_pass[-200:].decode("ascii", errors="ignore")}'
                     )
         elif any(p in initial for p in _PROMPT_ENDS):
-            # Device dropped straight into CLI (no login needed)
-            pass
+            pass  # no login prompt — already at CLI
         else:
             raise ConnectionError(
                 f'Login failed — device sent unexpected banner: '
                 f'{initial[-200:].decode("ascii", errors="ignore")}'
             )
+
+        # ── privilege escalation ──────────────────────────────────────────────
+        # Many OLTs land at an unprivileged prompt (> or >>) after login.
+        # Send 'enable' and respond to the password prompt so we reach '#'
+        # where all show/display commands are available.
+        self._send('enable')
+        enable_resp = self._read_until(b'assword:', b'#', timeout=self.timeout)
+        if b'assword:' in enable_resp:
+            self._send(password)
+            self._read_until(b'#', b'>', timeout=self.timeout)
+        # If already at # (or enable not required), just continue.
 
     # ── public API ────────────────────────────────────────────────────────────
 
