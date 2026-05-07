@@ -84,33 +84,20 @@
 
           <hr class="my-1 mb-3">
 
-          <!-- Role & Contact -->
-          <h6 class="text-uppercase text-muted fw-semibold mb-3" style="font-size:0.72rem; letter-spacing:1px;">Role & Contact</h6>
+          <!-- Contact -->
+          <h6 class="text-uppercase text-muted fw-semibold mb-3" style="font-size:0.72rem; letter-spacing:1px;">Contact</h6>
           <div class="row g-3 mb-4">
-            <div class="col-md-4">
-              <label class="form-label fw-medium">Role <span class="text-danger">*</span></label>
-              {{ profile_form.role }}
-              <div class="form-text">Controls permissions.</div>
-            </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
               <label class="form-label fw-medium">Phone Number</label>
               {{ profile_form.phone }}
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
               <label class="form-label fw-medium">Organization</label>
               {{ profile_form.organization }}
             </div>
           </div>
 
-          <!-- Role description -->
-          <div class="alert alert-info py-2 px-3 mb-4" style="font-size:0.82rem;">
-            <i class="fa-solid fa-circle-info me-1"></i>
-            <strong>Admin</strong> — Full access &nbsp;|&nbsp;
-            <strong>Operator</strong> — Add/Edit OLTs and ONTs &nbsp;|&nbsp;
-            <strong>Viewer</strong> — Read-only access
-          </div>
-
-          <!-- Submit -->
+          <!-- Actions -->
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-primary px-4">
               <i class="fa-solid fa-floppy-disk me-1"></i>
@@ -119,6 +106,34 @@
             <a href="{% url 'users_list' %}" class="btn btn-outline-secondary">Cancel</a>
           </div>
         </form>
+
+        {% if action == 'Edit' and target_user != request.user %}
+        <hr class="my-4">
+        <h6 class="text-uppercase text-muted fw-semibold mb-3" style="font-size:0.72rem; letter-spacing:1px;">Access Level</h6>
+        <div class="d-flex align-items-center gap-3 p-3" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;">
+          <div style="flex:1;font-weight:600;font-size:0.9rem;">
+            {% if target_user.is_superuser %}
+              <span class="badge bg-danger me-2">Super Admin</span> Full access to all accounts and OLTs.
+            {% else %}
+              <span class="badge bg-primary me-2">User</span> Can only manage their own OLTs.
+            {% endif %}
+          </div>
+          <form method="post" action="{% url 'user_toggle_superuser' target_user.pk %}">
+            {% csrf_token %}
+            {% if target_user.is_superuser %}
+            <button type="submit" class="btn btn-sm btn-outline-warning"
+                    onclick="return confirm('Remove Super Admin from {{ target_user.username }}?')">
+              <i class="fa-solid fa-user-minus me-1"></i>Remove Admin
+            </button>
+            {% else %}
+            <button type="submit" class="btn btn-sm btn-outline-success"
+                    onclick="return confirm('Make {{ target_user.username }} a Super Admin?')">
+              <i class="fa-solid fa-shield-halved me-1"></i>Make Super Admin
+            </button>
+            {% endif %}
+          </form>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>

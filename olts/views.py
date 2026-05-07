@@ -15,7 +15,7 @@ def olt_list(request):
     vendor = request.GET.get('vendor', '')
     status = request.GET.get('status', '')
 
-    olts = _olt_qs()
+    olts = _olt_qs(request.user)
     if search:
         olts = olts.filter(
             Q(name__icontains=search) |
@@ -35,8 +35,11 @@ def olt_list(request):
     })
 
 
-def _olt_qs():
-    return OLT.objects.filter(is_deleted=False).annotate(
+def _olt_qs(user=None):
+    qs = OLT.objects.filter(is_deleted=False)
+    if user and not user.is_superuser:
+        qs = qs.filter(owner=user)
+    return qs.annotate(
         ont_count=Count('onts'),
         online_ont_count=Count('onts', filter=Q(onts__status='online')),
         offline_ont_count=Count(
@@ -48,7 +51,7 @@ def _olt_qs():
 
 @login_required
 def olt_detail(request, pk):
-    olt = get_object_or_404(_olt_qs(), pk=pk)
+    olt = get_object_or_404(_olt_qs(request.user), pk=pk)
     pon_ports = olt.pon_ports.annotate(
         online_count=Count('onts', filter=Q(onts__status='online')),
         offline_count=Count('onts', filter=Q(onts__status__in=['offline', 'los', 'power_failure', 'fiber_cut', 'degraded'])),
@@ -70,6 +73,7 @@ def olt_create(request):
         if form.is_valid():
             olt = form.save(commit=False)
             olt.status = 'unknown'
+            olt.owner = request.user
             olt.save()
 
             from django.conf import settings as dj_settings
@@ -114,7 +118,7 @@ def olt_create(request):
 @login_required
 @operator_required
 def olt_edit(request, pk):
-    olt = get_object_or_404(OLT, pk=pk)
+    olt = get_object_or_404(OLT, pk=pk, is_deleted=False) if request.user.is_superuser else get_object_or_404(OLT, pk=pk, owner=request.user, is_deleted=False)
     if request.method == 'POST':
         form = OLTForm(request.POST, instance=olt)
         if form.is_valid():
@@ -129,7 +133,7 @@ def olt_edit(request, pk):
 @login_required
 @admin_required
 def olt_delete(request, pk):
-    olt = get_object_or_404(OLT, pk=pk, is_deleted=False)
+    olt = get_object_or_404(OLT, pk=pk, is_deleted=False) if request.user.is_superuser else get_object_or_404(OLT, pk=pk, owner=request.user, is_deleted=False)
     if request.method == 'POST':
         olt.soft_delete()
         messages.success(request, f'OLT "{olt.name}" deleted.')
@@ -316,7 +320,7 @@ def scan_pon_port(request, olt_pk, pon_pk):
 
 @login_required
 def pon_detail(request, olt_pk, pon_pk):
-    olt = get_object_or_404(_olt_qs(), pk=olt_pk)
+    olt = get_object_or_404(_olt_qs(request.user), pk=olt_pk)
     pon_port = get_object_or_404(PONPort, pk=pon_pk, olt=olt)
     registered_onts = list(pon_port.onts.all().order_by('ont_id'))
 
@@ -349,6 +353,46 @@ def pon_detail(request, olt_pk, pon_pk):
         'unregistered_count': unregistered_count,
         'registered_count': len(registered_onts),
         'discovered_onts': discovered,
+    })
+
+
+@login_required
+def super_admin_dashboard(request):
+    if not request.user.is_superuser:
+        messages.error(request, 'Access denied.')
+        return redirect('olt_list')
+
+    from django.contrib.auth.models import User
+    from onts.models import ONT
+
+    all_olts = _olt_qs().select_related('owner')
+    all_users = User.objects.filter(is_active=True).select_related('profile').order_by('date_joined')
+
+    user_stats = []
+    for u in all_users:
+        user_olts = all_olts.filter(owner=u)
+        ont_qs = ONT.objects.filter(olt__owner=u, olt__is_deleted=False)
+        user_stats.append({
+            'user': u,
+            'olt_count': user_olts.count(),
+            'ont_count': ont_qs.count(),
+            'online_count': ont_qs.filter(status='online').count(),
+            'olts': user_olts[:5],
+        })
+
+    total_olts   = all_olts.count()
+    total_onts   = ONT.objects.filter(olt__is_deleted=False).count()
+    online_onts  = ONT.objects.filter(olt__is_deleted=False, status='online').count()
+    offline_onts = ONT.objects.filter(olt__is_deleted=False, status__in=['offline','los','power_failure','fiber_cut']).count()
+
+    return render(request, 'olts/super_admin_dashboard.html', {
+        'all_olts': all_olts,
+        'user_stats': user_stats,
+        'total_users': all_users.count(),
+        'total_olts': total_olts,
+        'total_onts': total_onts,
+        'online_onts': online_onts,
+        'offline_onts': offline_onts,
     })
 
 

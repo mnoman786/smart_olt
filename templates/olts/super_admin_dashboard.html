@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block title %}Super Admin Dashboard{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item active">Super Admin</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.sa-stat { background:#fff; border:1.5px solid #e2e8f0; border-radius:14px; padding:20px 24px; }
+.sa-stat .v { font-size:2rem; font-weight:900; line-height:1; }
+.sa-stat .l { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.07em; color:#94a3b8; margin-top:4px; }
+
+.user-card { background:#fff; border:1.5px solid #e2e8f0; border-radius:14px; overflow:hidden; margin-bottom:16px; }
+.user-card-head { padding:16px 20px; display:flex; align-items:center; gap:14px; border-bottom:1px solid #f1f5f9; }
+.user-avatar { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#3b82f6,#1d4ed8); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1rem; flex-shrink:0; }
+.user-card-body { padding:14px 20px; }
+.olt-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f8fafc; font-size:0.83rem; }
+.olt-row:last-child { border-bottom:none; }
+.status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px; }
+.dot-online { background:#22c55e; }
+.dot-offline { background:#ef4444; }
+.dot-unknown { background:#94a3b8; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 60%,#7c3aed 100%);border-radius:14px;padding:24px 28px;color:#fff;margin-bottom:24px;">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+      <div style="font-size:0.72rem;font-weight:600;opacity:0.6;text-transform:uppercase;letter-spacing:0.08em;">Super Admin</div>
+      <h3 style="font-size:1.5rem;font-weight:800;margin:4px 0 0;">Global Dashboard</h3>
+      <div style="font-size:0.8rem;opacity:0.65;margin-top:4px;">All users · All OLTs · All ONTs</div>
+    </div>
+    <a href="{% url 'olt_list' %}" class="btn btn-sm btn-outline-light">
+      <i class="fa-solid fa-arrow-left me-1"></i>My OLTs
+    </a>
+  </div>
+
+  <!-- Global stats -->
+  <div class="row g-3 mt-2">
+    <div class="col-6 col-md-3">
+      <div style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.14);border-radius:10px;padding:14px 18px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:800;">{{ total_users }}</div>
+        <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;opacity:0.6;">Users</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.14);border-radius:10px;padding:14px 18px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:800;">{{ total_olts }}</div>
+        <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;opacity:0.6;">Total OLTs</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.14);border-radius:10px;padding:14px 18px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:800;color:#86efac;">{{ online_onts }}</div>
+        <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;opacity:0.6;">ONTs Online</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.14);border-radius:10px;padding:14px 18px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:800;color:#fca5a5;">{{ offline_onts }}</div>
+        <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;opacity:0.6;">ONTs Offline</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Users & their OLTs -->
+<h5 style="font-weight:700;margin-bottom:16px;">Users & Their OLTs</h5>
+
+{% for stat in user_stats %}
+<div class="user-card">
+  <div class="user-card-head">
+    <div class="user-avatar">{{ stat.user.username|slice:":1"|upper }}</div>
+    <div style="flex:1;">
+      <div style="font-weight:700;font-size:0.95rem;color:#1e293b;">
+        {{ stat.user.get_full_name|default:stat.user.username }}
+        {% if stat.user.is_superuser %}<span class="badge bg-danger ms-1" style="font-size:0.6rem;">Super Admin</span>{% endif %}
+      </div>
+      <div style="font-size:0.72rem;color:#94a3b8;">
+        {{ stat.user.email|default:"No email" }}
+        &nbsp;·&nbsp; Joined {{ stat.user.date_joined|date:"M d, Y" }}
+      </div>
+    </div>
+    <div class="d-flex gap-3">
+      <div style="text-align:center;">
+        <div style="font-size:1.1rem;font-weight:800;color:#1e293b;">{{ stat.olt_count }}</div>
+        <div style="font-size:0.62rem;color:#94a3b8;text-transform:uppercase;">OLTs</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:1.1rem;font-weight:800;color:#22c55e;">{{ stat.online_count }}</div>
+        <div style="font-size:0.62rem;color:#94a3b8;text-transform:uppercase;">Online</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:1.1rem;font-weight:800;color:#64748b;">{{ stat.ont_count }}</div>
+        <div style="font-size:0.62rem;color:#94a3b8;text-transform:uppercase;">ONTs</div>
+      </div>
+    </div>
+    <span class="badge {% if stat.user.profile.role == 'admin' %}bg-danger{% elif stat.user.profile.role == 'operator' %}bg-primary{% else %}bg-secondary{% endif %}" style="font-size:0.68rem;">
+      {{ stat.user.profile.get_role_display }}
+    </span>
+  </div>
+
+  {% if stat.olts %}
+  <div class="user-card-body">
+    {% for olt in stat.olts %}
+    <div class="olt-row">
+      <div class="d-flex align-items-center gap-2">
+        <span class="status-dot {% if olt.status == 'online' %}dot-online{% elif olt.status == 'offline' %}dot-offline{% else %}dot-unknown{% endif %}"></span>
+        <a href="{% url 'olt_detail' olt.pk %}" style="font-weight:600;color:#1e293b;text-decoration:none;">{{ olt.name }}</a>
+        <span style="color:#94a3b8;">{{ olt.ip_address }}</span>
+        <span style="background:#f1f5f9;color:#64748b;font-size:0.65rem;padding:2px 7px;border-radius:10px;">{{ olt.vendor }}</span>
+      </div>
+      <div class="d-flex gap-3" style="color:#64748b;">
+        <span><strong style="color:#22c55e;">{{ olt.online_ont_count }}</strong> online</span>
+        <span><strong style="color:#64748b;">{{ olt.ont_count }}</strong> total</span>
+      </div>
+    </div>
+    {% endfor %}
+    {% if stat.olt_count > 5 %}
+    <div style="font-size:0.75rem;color:#94a3b8;padding-top:8px;">
+      + {{ stat.olt_count|add:"-5" }} more OLTs not shown
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="user-card-body" style="color:#94a3b8;font-size:0.83rem;">No OLTs added yet.</div>
+  {% endif %}
+</div>
+{% empty %}
+<div class="text-center py-5 text-muted">No users found.</div>
+{% endfor %}
+
+{% endblock %}

@@ -5,37 +5,29 @@ from django.dispatch import receiver
 
 
 class UserProfile(models.Model):
-    ROLE_CHOICES = [
-        ('admin', 'Administrator'),
-        ('operator', 'Operator'),
-        ('viewer', 'Viewer'),
-    ]
-
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='viewer')
     phone = models.CharField(max_length=20, blank=True)
     organization = models.CharField(max_length=100, blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.user.username} ({self.get_role_display()})"
+        return self.user.username
 
     @property
     def is_admin(self):
-        return self.role == 'admin'
+        return self.user.is_superuser
 
     @property
     def is_operator(self):
-        return self.role in ['admin', 'operator']
+        return True  # all logged-in users can manage their own OLTs
 
     @property
     def role_badge_class(self):
-        return {
-            'admin': 'bg-danger',
-            'operator': 'bg-primary',
-            'viewer': 'bg-secondary',
-        }.get(self.role, 'bg-secondary')
+        return 'bg-danger' if self.user.is_superuser else 'bg-primary'
+
+    def get_role_display(self):
+        return 'Super Admin' if self.user.is_superuser else 'User'
 
 
 @receiver(post_save, sender=User)

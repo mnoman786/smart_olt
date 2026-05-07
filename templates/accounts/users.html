@@ -54,7 +54,7 @@
             <td class="text-muted" style="font-size:0.82rem;">{{ user.date_joined|date:"Y-m-d" }}</td>
             <td class="text-muted" style="font-size:0.82rem;">{% if user.last_login %}{{ user.last_login|timesince }} ago{% else %}Never{% endif %}</td>
             <td>
-              <div class="d-flex gap-1">
+              <div class="d-flex gap-1 flex-wrap">
                 <a href="{% url 'user_edit' user.pk %}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="fa-solid fa-pen"></i> Edit</a>
                 {% if user != request.user %}
                 <a href="{% url 'user_delete' user.pk %}" class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size:0.75rem;"><i class="fa-solid fa-trash"></i></a>

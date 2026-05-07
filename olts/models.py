@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 from core.utils import format_uptime, STATUS_BADGE
 
 
@@ -33,6 +34,7 @@ class OLT(models.Model):
     cpu_usage = models.FloatField(default=0)
     memory_usage = models.FloatField(default=0)
     temperature = models.FloatField(default=0)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='olts', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)

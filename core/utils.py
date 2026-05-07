@@ -51,21 +51,20 @@ def format_uptime(seconds):
 
 # ── Permission decorators ─────────────────────────────────────────────────────
 
-def admin_required(view_func):
+def superuser_required(view_func):
     @wraps(view_func)
     def _wrapped(request, *args, **kwargs):
-        if not request.user.is_authenticated or not request.user.profile.is_admin:
-            messages.error(request, 'Access denied. Administrator privileges required.')
-            return redirect('dashboard')
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            messages.error(request, 'Access denied.')
+            return redirect('olt_list')
         return view_func(request, *args, **kwargs)
     return _wrapped
+
+
+# Keep these as pass-through so existing imports don't break
+def admin_required(view_func):
+    return view_func
 
 
 def operator_required(view_func):
-    @wraps(view_func)
-    def _wrapped(request, *args, **kwargs):
-        if not request.user.is_authenticated or not request.user.profile.is_operator:
-            messages.error(request, 'Access denied. Operator privileges required.')
-            return redirect('dashboard')
-        return view_func(request, *args, **kwargs)
-    return _wrapped
+    return view_func
