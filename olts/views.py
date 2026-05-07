@@ -76,6 +76,13 @@ def olt_detail(request, pk):
 @login_required
 @operator_required
 def olt_create(request):
+    if not request.user.profile.can_add_olt:
+        messages.error(request,
+            f'OLT quota reached ({request.user.profile.olt_used}/{request.user.profile.olt_quota}). '
+            f'Contact your administrator to increase your quota.'
+        )
+        return redirect('olt_list')
+
     if request.method == 'POST':
         form = OLTForm(request.POST)
         if form.is_valid():
@@ -139,7 +146,6 @@ def olt_edit(request, pk):
 
 
 @login_required
-@admin_required
 def olt_delete(request, pk):
     olt = get_object_or_404(OLT, pk=pk, is_deleted=False) if request.user.is_superuser else get_object_or_404(OLT, pk=pk, owner=request.user, is_deleted=False)
     if request.method == 'POST':

@@ -9,7 +9,24 @@ class UserProfile(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     organization = models.CharField(max_length=100, blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    olt_quota = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def olt_used(self):
+        return self.user.olts.filter(is_deleted=False).count()
+
+    @property
+    def quota_remaining(self):
+        if self.user.is_superuser:
+            return None  # unlimited
+        return max(0, self.olt_quota - self.olt_used)
+
+    @property
+    def can_add_olt(self):
+        if self.user.is_superuser:
+            return True
+        return self.olt_used < self.olt_quota
 
     def __str__(self):
         return self.user.username

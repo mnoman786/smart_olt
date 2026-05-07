@@ -158,11 +158,30 @@
     <h4 class="page-title mb-1"><i class="fa-solid fa-server me-2 text-primary"></i>OLTs</h4>
     <p class="page-subtitle mb-0">Your fiber network equipment — click any device to see its ports and customers</p>
   </div>
-  {% if request.user.profile.is_operator %}
-  <a href="{% url 'olt_create' %}" class="btn btn-primary">
-    <i class="fa-solid fa-plus me-2"></i>Add OLT
-  </a>
-  {% endif %}
+  <div class="d-flex align-items-center gap-3">
+    {% if not request.user.is_superuser %}
+    <div style="font-size:0.8rem;color:#64748b;text-align:right;">
+      <div style="font-weight:700;color:#1e293b;">
+        {{ request.user.profile.olt_used }} / {{ request.user.profile.olt_quota }}
+      </div>
+      <div>OLTs used</div>
+    </div>
+    <div style="width:6px;height:40px;background:#e2e8f0;border-radius:4px;overflow:hidden;">
+      {% if request.user.profile.olt_quota > 0 %}
+      <div style="height:{% widthratio request.user.profile.olt_used request.user.profile.olt_quota 100 %}%;background:{% if request.user.profile.quota_remaining == 0 %}#ef4444{% else %}#3b82f6{% endif %};border-radius:4px;"></div>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if request.user.profile.can_add_olt %}
+    <a href="{% url 'olt_create' %}" class="btn btn-primary">
+      <i class="fa-solid fa-plus me-2"></i>Add OLT
+    </a>
+    {% else %}
+    <button class="btn btn-secondary" disabled title="Quota reached — contact admin">
+      <i class="fa-solid fa-plus me-2"></i>Add OLT
+    </button>
+    {% endif %}
+  </div>
 </div>
 
 <!-- ── Summary Tiles ── -->
@@ -302,7 +321,7 @@
       <i class="fa-solid fa-pen"></i>
     </a>
     {% endif %}
-    {% if request.user.profile.is_admin %}
+    {% if request.user.is_superuser or olt.owner == request.user %}
     <a href="{% url 'olt_delete' olt.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
       <i class="fa-solid fa-trash"></i>
     </a>

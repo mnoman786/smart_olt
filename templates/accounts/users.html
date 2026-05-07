@@ -34,7 +34,7 @@
     <div class="table-responsive">
       <table class="table table-hover mb-0 data-table">
         <thead class="table-dark">
-          <tr><th>User</th><th>Email</th><th>Role</th><th>Organization</th><th>Joined</th><th>Last Login</th><th>Actions</th></tr>
+          <tr><th>User</th><th>Email</th><th>Role</th><th>OLT Quota</th><th>Organization</th><th>Joined</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {% for user in users %}
@@ -50,9 +50,17 @@
             </td>
             <td class="text-muted" style="font-size:0.85rem;">{{ user.email|default:"—" }}</td>
             <td><span class="badge {{ user.profile.role_badge_class }}">{{ user.profile.get_role_display }}</span></td>
+            <td>
+              {% if user.is_superuser %}
+                <span class="text-muted" style="font-size:0.82rem;">Unlimited</span>
+              {% else %}
+                <span style="font-size:0.85rem;font-weight:600;{% if user.profile.quota_remaining == 0 %}color:#ef4444;{% endif %}">
+                  {{ user.profile.olt_used }} / {{ user.profile.olt_quota }}
+                </span>
+              {% endif %}
+            </td>
             <td class="text-muted" style="font-size:0.85rem;">{{ user.profile.organization|default:"—" }}</td>
             <td class="text-muted" style="font-size:0.82rem;">{{ user.date_joined|date:"Y-m-d" }}</td>
-            <td class="text-muted" style="font-size:0.82rem;">{% if user.last_login %}{{ user.last_login|timesince }} ago{% else %}Never{% endif %}</td>
             <td>
               <div class="d-flex gap-1 flex-wrap">
                 <a href="{% url 'user_edit' user.pk %}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="fa-solid fa-pen"></i> Edit</a>

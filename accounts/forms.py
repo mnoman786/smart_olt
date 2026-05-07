@@ -44,8 +44,9 @@ class UserEditForm(forms.ModelForm):
 class UserProfileForm(forms.ModelForm):
     class Meta:
         model = UserProfile
-        fields = ['phone', 'organization', 'avatar']
+        fields = ['phone', 'organization', 'avatar', 'olt_quota']
         widgets = {
             'phone': forms.TextInput(attrs=FC),
             'organization': forms.TextInput(attrs=FC),
+            'olt_quota': forms.NumberInput(attrs={**FC, 'min': '0'}),
         }
