@@ -17,4 +17,5 @@ urlpatterns = [
     path('<int:pk>/scan-all/', views.scan_olt_all_ports, name='scan_olt_all_ports'),
     path('<int:pk>/sync-device/', views.sync_olt_device, name='sync_olt_device'),
     path('super-admin/', views.super_admin_dashboard, name='super_admin_dashboard'),
+    path('<int:pk>/diag/', views.olt_diag, name='olt_diag'),
 ]

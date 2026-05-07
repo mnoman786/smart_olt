@@ -411,6 +411,67 @@ def super_admin_dashboard(request):
 
 
 @login_required
+def olt_diag(request, pk):
+    """
+    Superadmin-only: run safe read-only commands on the OLT and return raw output.
+    Helps debug parsing issues without touching device config.
+    POST with ?cmd=<command_key>  e.g. ?cmd=port_list  or ?cmd=raw&raw=show+version
+    """
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Superadmin only'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    olt = get_object_or_404(OLT, pk=pk)
+    cmd_key = request.POST.get('cmd', '').strip()
+    raw_cmd = request.POST.get('raw', '').strip()
+
+    # Whitelist of safe read-only commands
+    SAFE_KEYS = {'version', 'cpu', 'memory', 'temperature', 'port_list',
+                 'ont_list', 'ont_detail', 'uncfg_list', 'uncfg_all', 'optical'}
+
+    from .ssh_service import _VENDOR_COMMANDS, TelnetSession, TELNET_TIMEOUT
+    import re as _re
+
+    cmds = _VENDOR_COMMANDS.get(olt.vendor, {})
+
+    # Build the actual command string
+    if raw_cmd:
+        # Only allow show/display commands — block anything that could change config
+        if not _re.match(r'^\s*(show|display)\s+', raw_cmd, _re.I):
+            return JsonResponse({'error': 'Only show/display commands allowed.'})
+        cmd = raw_cmd
+    elif cmd_key in SAFE_KEYS:
+        template = cmds.get(cmd_key, '')
+        if not template:
+            return JsonResponse({'error': f'No command for key {cmd_key} on {olt.vendor}'})
+        board  = int(request.POST.get('board', 1))
+        port   = int(request.POST.get('port', 1))
+        port_b = int(request.POST.get('port_b', 1))
+        ont_id = int(request.POST.get('ont_id', 1))
+        try:
+            cmd = template.format(board=board, port_b=port_b, port=port, ont_id=ont_id)
+        except KeyError:
+            cmd = template
+    else:
+        return JsonResponse({'error': f'Unknown cmd key: {cmd_key}. Use one of: {sorted(SAFE_KEYS)}'})
+
+    try:
+        session = TelnetSession(
+            host=str(olt.ip_address),
+            port=olt.telnet_port,
+            username=olt.username,
+            password=olt.password,
+            timeout=TELNET_TIMEOUT,
+        )
+        output = session.send_command(cmd, timeout=TELNET_TIMEOUT)
+        session.close()
+        return JsonResponse({'cmd': cmd, 'output': output, 'vendor': olt.vendor})
+    except Exception as exc:
+        return JsonResponse({'cmd': cmd, 'error': str(exc), 'output': ''})
+
+
+@login_required
 def olt_task_status(request, task_id):
     """Poll Celery task result."""
     try:

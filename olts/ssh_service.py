@@ -7,11 +7,11 @@ Paramiko / Netmiko are no longer required.
 from __future__ import annotations
 
 import re
+import socket
 import logging
 import random
 import threading
 import time
-import telnetlib
 from contextlib import contextmanager
 
 from django.conf import settings
@@ -23,62 +23,145 @@ _sem = threading.Semaphore(getattr(settings, 'OLT_SSH_MAX_CONCURRENT', 50))
 DEMO_MODE: bool = getattr(settings, 'OLT_DEMO_MODE', False)
 TELNET_TIMEOUT: int = getattr(settings, 'OLT_SSH_TIMEOUT', 30)
 
+# CLI prompt endings — most OLT vendors use # or >
+_PROMPT_ENDS = (b'#', b'>')
 
-# ── Data classes ──────────────────────────────────────────────────────────────
-
-class OLTStats:
-    def __init__(self, connected=False, firmware='', uptime_seconds=0,
-                 cpu_usage=0.0, memory_usage=0.0, temperature=0.0, error=''):
-        self.connected = connected
-        self.firmware = firmware
-        self.uptime_seconds = uptime_seconds
-        self.cpu_usage = cpu_usage
-        self.memory_usage = memory_usage
-        self.temperature = temperature
-        self.error = error
-
-    def __dict__(self):
-        return {k: v for k, v in self.__dict__.items()}
+# Telnet protocol constants
+_IAC  = 0xFF   # Interpret As Command
+_WILL = 0xFB
+_WONT = 0xFC
+_DO   = 0xFD
+_DONT = 0xFE
+_SB   = 0xFA   # subnegotiation begin
+_SE   = 0xF0   # subnegotiation end
 
 
-# ── Telnet session ────────────────────────────────────────────────────────────
+# ── Raw-socket Telnet session ─────────────────────────────────────────────────
 
 class TelnetSession:
     """
-    Thin wrapper around telnetlib.Telnet that handles OLT login and
-    single-command send/receive cycles.
-    """
+    Raw-socket Telnet client with proper IAC option negotiation.
 
-    # Patterns that indicate the CLI is ready for the next command
-    _READY = [b'#', b'>']
+    When the OLT sends DO/WILL option requests (terminal type, echo, window
+    size …) we reply immediately with WONT/DONT so the device moves on to
+    the login prompt without waiting.  This removes the long hang caused by
+    unanswered negotiation frames.
+    """
 
     def __init__(self, host: str, port: int, username: str, password: str,
                  timeout: int = 30):
         self.timeout = timeout
-        self.tn = telnetlib.Telnet(host, port, timeout=timeout)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.settimeout(timeout)
+        self.sock.connect((host, port))
         self._login(username, password)
 
+    # ── IAC negotiation ───────────────────────────────────────────────────────
+
+    def _process_iac(self, data: bytes) -> bytes:
+        """
+        Walk through raw bytes, reply to every IAC DO/WILL with WONT/DONT,
+        skip subnegotiation blocks, and return the clean text portion.
+        """
+        out = bytearray()
+        i = 0
+        while i < len(data):
+            b = data[i]
+            if b != _IAC:
+                out.append(b)
+                i += 1
+                continue
+
+            if i + 1 >= len(data):
+                break
+
+            cmd = data[i + 1]
+
+            if cmd == _SB:
+                # Skip everything until IAC SE
+                end = data.find(bytes([_IAC, _SE]), i + 2)
+                i = end + 2 if end != -1 else len(data)
+
+            elif cmd in (_WILL, _DO, _WONT, _DONT) and i + 2 < len(data):
+                opt = data[i + 2]
+                # Reply: to DO → WONT,  to WILL → DONT
+                if cmd == _DO:
+                    self.sock.sendall(bytes([_IAC, _WONT, opt]))
+                elif cmd == _WILL:
+                    self.sock.sendall(bytes([_IAC, _DONT, opt]))
+                # WONT / DONT need no reply
+                i += 3
+
+            else:
+                # 2-byte command (e.g. IAC NOP)
+                i += 2
+
+        return bytes(out)
+
+    def _read_until(self, *patterns: bytes, timeout: float | None = None) -> bytes:
+        """
+        Read from socket, process IAC frames (replying inline), accumulate
+        clean text, and return once any pattern is found or timeout expires.
+        """
+        clean_buf = b''
+        raw_buf   = b''
+        deadline  = time.monotonic() + (timeout or self.timeout)
+        self.sock.settimeout(0.3)
+        try:
+            while time.monotonic() < deadline:
+                try:
+                    chunk = self.sock.recv(4096)
+                    if not chunk:
+                        break
+                    raw_buf   += chunk
+                    clean_buf  = self._process_iac(raw_buf)
+                    if any(p in clean_buf for p in patterns):
+                        return clean_buf
+                except socket.timeout:
+                    continue
+        finally:
+            self.sock.settimeout(self.timeout)
+        return clean_buf
+
+    def _send(self, text: str):
+        self.sock.sendall(text.encode('ascii', errors='replace') + b'\r\n')
+
+    # ── login ─────────────────────────────────────────────────────────────────
+
     def _login(self, username: str, password: str):
-        # Some OLTs send a banner first; wait up to timeout for the username prompt
-        self.tn.read_until(b'sername:', timeout=self.timeout)
-        self.tn.write(username.encode('ascii', errors='replace') + b'\r\n')
-        self.tn.read_until(b'assword:', timeout=self.timeout)
-        self.tn.write(password.encode('ascii', errors='replace') + b'\r\n')
-        idx, _, _ = self.tn.expect(self._READY, timeout=self.timeout)
-        if idx < 0:
+        # Read whatever the device sends first (banner + login prompt)
+        initial = self._read_until(b'sername:', b'ogin:', b'#', b'>', timeout=self.timeout)
+
+        if b'sername:' in initial or b'ogin:' in initial:
+            self._send(username)
+            after_user = self._read_until(b'assword:', b'#', b'>', timeout=self.timeout)
+            if b'assword:' in after_user:
+                self._send(password)
+                after_pass = self._read_until(b'#', b'>', timeout=self.timeout)
+                if not any(p in after_pass for p in _PROMPT_ENDS):
+                    raise ConnectionError(
+                        f'Login failed — wrong credentials or unexpected response: '
+                        f'{after_pass[-200:].decode("ascii", errors="ignore")}'
+                    )
+        elif any(p in initial for p in _PROMPT_ENDS):
+            # Device dropped straight into CLI (no login needed)
+            pass
+        else:
             raise ConnectionError(
-                'Login failed — no CLI prompt received after credentials. '
-                'Check username/password and that Telnet is enabled on the device.'
+                f'Login failed — device sent unexpected banner: '
+                f'{initial[-200:].decode("ascii", errors="ignore")}'
             )
 
+    # ── public API ────────────────────────────────────────────────────────────
+
     def send_command(self, cmd: str, timeout: int = 30) -> str:
-        self.tn.write(cmd.encode('ascii', errors='replace') + b'\r\n')
-        idx, _, data = self.tn.expect(self._READY, timeout=timeout)
-        return data.decode('ascii', errors='ignore')
+        self._send(cmd)
+        raw = self._read_until(b'#', b'>', timeout=timeout)
+        return raw.decode('ascii', errors='ignore')
 
     def close(self):
         try:
-            self.tn.close()
+            self.sock.close()
         except Exception:
             pass
 
