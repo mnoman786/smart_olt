@@ -35,21 +35,22 @@
 .form-label { font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 5px; }
 .form-text { font-size: 0.72rem; color: #94a3b8; margin-top: 3px; }
 
-/* Speed slider visual */
-.speed-display {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 6px;
+/* Speed input */
+.speed-input-wrap { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.speed-input-wrap input[type=number] {
+  width: 130px; font-size: 1rem; font-weight: 700;
+  text-align: center; border: 1.5px solid #e2e8f0; border-radius: 8px;
+  padding: 7px 10px; background: #f8fafc; color: #1e293b;
 }
-.speed-display input[type=range] { flex: 1; }
-.speed-val {
-  min-width: 70px;
-  text-align: right;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #1e293b;
+.speed-input-wrap input[type=number]:focus { border-color: #3b82f6; outline: none; background: #fff; }
+.speed-unit { font-size: 0.85rem; font-weight: 600; color: #64748b; }
+.speed-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.speed-preset {
+  padding: 4px 11px; border-radius: 20px; border: 1.5px solid #e2e8f0;
+  font-size: 0.72rem; font-weight: 600; cursor: pointer;
+  color: #64748b; background: #f8fafc; transition: all 0.13s;
 }
+.speed-preset:hover { border-color: #3b82f6; color: #1d4ed8; background: #eff6ff; }
 
 /* Protocol chips */
 .proto-chips { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -182,13 +183,21 @@
 
       <div class="mb-4">
         <label class="form-label">Download Speed (Mbps)</label>
-        <div class="speed-display">
-          <input type="range" class="form-range" min="1" max="10000" step="1"
-                 id="dlRange" value="{{ form.download_speed.value|default:100 }}"
-                 oninput="updateSpeed('dl', this.value)">
-          <div class="speed-val"><span id="dlVal">{{ form.download_speed.value|default:100 }}</span> Mbps</div>
+        <div class="speed-input-wrap">
+          <input type="number" id="id_download_speed" name="download_speed" min="1" max="100000"
+                 value="{{ form.download_speed.value|default:100 }}">
+          <span class="speed-unit">Mbps</span>
         </div>
-        {{ form.download_speed }}
+        <div class="speed-presets">
+          <span class="speed-preset" onclick="setSpeed('id_download_speed',10)">10</span>
+          <span class="speed-preset" onclick="setSpeed('id_download_speed',25)">25</span>
+          <span class="speed-preset" onclick="setSpeed('id_download_speed',50)">50</span>
+          <span class="speed-preset" onclick="setSpeed('id_download_speed',100)">100</span>
+          <span class="speed-preset" onclick="setSpeed('id_download_speed',200)">200</span>
+          <span class="speed-preset" onclick="setSpeed('id_download_speed',500)">500</span>
+          <span class="speed-preset" onclick="setSpeed('id_download_speed',1000)">1000</span>
+          <span class="speed-preset" onclick="setSpeed('id_download_speed',2000)">2000</span>
+        </div>
         {% if form.download_speed.errors %}
         <div class="text-danger mt-1" style="font-size:0.78rem;">{{ form.download_speed.errors.0 }}</div>
         {% endif %}
@@ -196,13 +205,21 @@
 
       <div>
         <label class="form-label">Upload Speed (Mbps)</label>
-        <div class="speed-display">
-          <input type="range" class="form-range" min="1" max="10000" step="1"
-                 id="ulRange" value="{{ form.upload_speed.value|default:50 }}"
-                 oninput="updateSpeed('ul', this.value)">
-          <div class="speed-val"><span id="ulVal">{{ form.upload_speed.value|default:50 }}</span> Mbps</div>
+        <div class="speed-input-wrap">
+          <input type="number" id="id_upload_speed" name="upload_speed" min="1" max="100000"
+                 value="{{ form.upload_speed.value|default:50 }}">
+          <span class="speed-unit">Mbps</span>
         </div>
-        {{ form.upload_speed }}
+        <div class="speed-presets">
+          <span class="speed-preset" onclick="setSpeed('id_upload_speed',5)">5</span>
+          <span class="speed-preset" onclick="setSpeed('id_upload_speed',10)">10</span>
+          <span class="speed-preset" onclick="setSpeed('id_upload_speed',25)">25</span>
+          <span class="speed-preset" onclick="setSpeed('id_upload_speed',50)">50</span>
+          <span class="speed-preset" onclick="setSpeed('id_upload_speed',100)">100</span>
+          <span class="speed-preset" onclick="setSpeed('id_upload_speed',200)">200</span>
+          <span class="speed-preset" onclick="setSpeed('id_upload_speed',500)">500</span>
+          <span class="speed-preset" onclick="setSpeed('id_upload_speed',1000)">1000</span>
+        </div>
         {% if form.upload_speed.errors %}
         <div class="text-danger mt-1" style="font-size:0.78rem;">{{ form.upload_speed.errors.0 }}</div>
         {% endif %}
@@ -269,25 +286,10 @@
 
 {% block extra_js %}
 <script>
-/* ── Sync hidden range inputs with number inputs ── */
-function updateSpeed(type, val) {
-  const numInput = document.getElementById(type === 'dl' ? 'id_download_speed' : 'id_upload_speed');
-  const label    = document.getElementById(type === 'dl' ? 'dlVal' : 'ulVal');
-  numInput.value = val;
-  label.textContent = val;
+function setSpeed(id, val) {
+  document.getElementById(id).value = val;
 }
 
-/* Keep number inputs in sync with range on direct edit */
-document.getElementById('id_download_speed').addEventListener('input', function() {
-  document.getElementById('dlRange').value = this.value;
-  document.getElementById('dlVal').textContent = this.value;
-});
-document.getElementById('id_upload_speed').addEventListener('input', function() {
-  document.getElementById('ulRange').value = this.value;
-  document.getElementById('ulVal').textContent = this.value;
-});
-
-/* ── Vendor tiles ── */
 const VENDOR_CLASSES = { ZTE: 'selected-zte', HUAWEI: 'selected-huawei', ALL: 'selected-all' };
 function pickVendor(val, el) {
   document.querySelectorAll('#vendorTiles .vendor-tile').forEach(t => {
@@ -297,14 +299,12 @@ function pickVendor(val, el) {
   document.getElementById('id_vendor').value = val;
 }
 
-/* ── Protocol chips ── */
 function pickProto(val, el) {
   document.querySelectorAll('#protoChips .proto-chip').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
   document.getElementById('id_protocol').value = val;
 }
 
-/* ── Init on load ── */
 (function init() {
   const vendor   = document.getElementById('id_vendor').value   || 'ALL';
   const protocol = document.getElementById('id_protocol').value || 'dhcp';
@@ -314,10 +314,6 @@ function pickProto(val, el) {
 
   const pc = document.querySelector(`#protoChips [data-val="${protocol}"]`);
   if (pc) pc.classList.add('selected');
-
-  // Hide number inputs (range sliders handle it visually)
-  document.getElementById('id_download_speed').style.display = 'none';
-  document.getElementById('id_upload_speed').style.display = 'none';
 })();
 </script>
 {% endblock %}
