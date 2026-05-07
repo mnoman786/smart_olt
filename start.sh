@@ -1,19 +1,12 @@
 #!/bin/bash
 # SmartOLT startup script
-# Usage: bash start.sh [--prod]
-# Default: Django dev server on port 8000
-# --prod:  Gunicorn on port 8000
+# Usage: bash start.sh
 
 set -e
 
 PROJECT_DIR="/root/smart_olt"
 VENV="$PROJECT_DIR/env/bin"
 LOG_DIR="$PROJECT_DIR/logs"
-PROD=false
-
-for arg in "$@"; do
-  [ "$arg" = "--prod" ] && PROD=true
-done
 
 cd "$PROJECT_DIR"
 mkdir -p "$LOG_DIR"
@@ -26,7 +19,7 @@ fi
 source "$VENV/activate"
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
-echo "[1/5] Starting Redis..."
+echo "[1/4] Starting Redis..."
 if ! systemctl is-active --quiet redis-server 2>/dev/null; then
   systemctl start redis-server 2>/dev/null || redis-server --daemonize yes \
     --logfile "$LOG_DIR/redis.log" --loglevel notice
@@ -34,14 +27,14 @@ fi
 echo "      Redis OK"
 
 # ── Django migrations + static ────────────────────────────────────────────────
-echo "[2/5] Running migrations..."
+echo "[2/4] Running migrations..."
 python manage.py migrate --noinput
 
-echo "[3/5] Collecting static files..."
+echo "[3/4] Collecting static files..."
 python manage.py collectstatic --noinput --clear -v 0
 
-# ── Kill any previous Celery processes ────────────────────────────────────────
-echo "[4/5] Starting Celery worker + beat..."
+# ── Celery ────────────────────────────────────────────────────────────────────
+echo "[4/4] Starting Celery worker + beat..."
 pkill -f "celery.*smartolt" 2>/dev/null || true
 sleep 1
 
@@ -60,24 +53,6 @@ celery -A smartolt beat \
   --detach
 
 echo "      Celery worker & beat started"
-
-# ── Django / Gunicorn ─────────────────────────────────────────────────────────
-echo "[5/5] Starting web server..."
-
-if [ "$PROD" = true ]; then
-  # Production: gunicorn (install with: pip install gunicorn)
-  pkill -f "gunicorn.*smartolt" 2>/dev/null || true
-  gunicorn smartolt.wsgi:application \
-    --bind 0.0.0.0:8000 \
-    --workers 4 \
-    --timeout 120 \
-    --access-logfile "$LOG_DIR/gunicorn-access.log" \
-    --error-logfile  "$LOG_DIR/gunicorn-error.log" \
-    --daemon
-  echo "      Gunicorn started on http://0.0.0.0:8000"
-else
-  echo "      Django dev server on http://0.0.0.0:8000"
-  echo "      Logs: $LOG_DIR/"
-  echo ""
-  python manage.py runserver 0.0.0.0:8000
-fi
+echo ""
+echo "Logs: $LOG_DIR/"
+echo "Done. Django is managed by systemctl (smartolt.service)"
