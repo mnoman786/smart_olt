@@ -266,19 +266,28 @@ def scan_olt_all_ports(request, pk):
         return JsonResponse({'error': 'POST required'}, status=405)
 
     olt = get_object_or_404(OLT, pk=pk)
-    from .ssh_service import discover_unregistered_onts_sync
+    from .ssh_service import scan_all_uncfg_sync
+
+    found = scan_all_uncfg_sync(olt)
+
+    # Group by port
+    port_map = {}
+    for entry in found:
+        key = (entry['board'], entry['port'])
+        if key not in port_map:
+            port_map[key] = []
+        port_map[key].append(entry)
 
     results = []
-    for pon_port in olt.pon_ports.all().order_by('board', 'port'):
-        found = discover_unregistered_onts_sync(olt, pon_port)
-        if found:
-            results.append({
-                'port_id':    pon_port.pk,
-                'port_label': pon_port.port_label,
-                'board':      pon_port.board,
-                'port':       pon_port.port,
-                'onts':       found,
-            })
+    for (board, port_num), onts in sorted(port_map.items()):
+        pon_port = olt.pon_ports.filter(board=board, port=port_num).first()
+        results.append({
+            'port_id':    pon_port.pk if pon_port else None,
+            'port_label': pon_port.port_label if pon_port else f'Board {board} / Port {port_num}',
+            'board':      board,
+            'port':       port_num,
+            'onts':       onts,
+        })
 
     total = sum(len(r['onts']) for r in results)
     return JsonResponse({'total': total, 'ports': results})

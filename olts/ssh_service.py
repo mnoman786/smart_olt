@@ -148,6 +148,33 @@ class ZTEParser:
         return results
 
     @staticmethod
+    def parse_uncfg_all(output: str) -> list[dict]:
+        """
+        Parse 'show gpon onu uncfg' (global, no port specified).
+        Returns list of {serial_number, vendor_info, board, port}.
+        Sample:
+          gpon-olt_1/1/1:
+            -  ZTEG12345678  ZTEG  ZTE-F660
+        """
+        results = []
+        current_board, current_port = 1, 1
+        for line in output.splitlines():
+            m_port = re.search(r'gpon-olt_(\d+)/\d+/(\d+)', line)
+            if m_port:
+                current_board, current_port = int(m_port.group(1)), int(m_port.group(2))
+                continue
+            m = re.match(r'\s*-\s+([A-F0-9a-z]{12,16})\s+(\S+)\s+(\S+)', line)
+            if m:
+                serial, vendor_id, onu_type = m.groups()
+                results.append({
+                    'serial_number': serial.upper(),
+                    'vendor_info': f'{vendor_id} {onu_type}'.strip(),
+                    'board': current_board,
+                    'port': current_port,
+                })
+        return results
+
+    @staticmethod
     def parse_port_list(output: str) -> list[tuple]:
         """
         Parse 'show interface gpon-olt' output.
@@ -343,6 +370,7 @@ _VENDOR_COMMANDS = {
         'reboot':      'interface gpon-onu_{board}/{port_b}/{port}:{ont_id}\nreboot\nexit',
         'factory_reset': 'interface gpon-onu_{board}/{port_b}/{port}:{ont_id}\nfactory-reset\nexit',
         'uncfg_list':  'show gpon onu uncfg gpon-olt_{board}/{port_b}/{port}',
+        'uncfg_all':   'show gpon onu uncfg',
     },
     'HUAWEI': {
         'version':     'display version',
@@ -808,3 +836,47 @@ def sync_olt_from_device_sync(olt) -> dict:
         error = str(exc)
 
     return {'ports_found': ports_found, 'onts_found': onts_found, 'error': error}
+
+
+def scan_all_uncfg_sync(olt) -> list[dict]:
+    """
+    Run a single global command to get ALL unregistered ONTs across every
+    PON port on the OLT in one SSH session.
+    Returns list of {serial_number, vendor_info, board, port}.
+    Falls back to per-port scan if vendor has no global command.
+    """
+    if DEMO_MODE:
+        rng = random.Random(olt.pk * 99991)
+        prefix = 'ZTEG' if olt.vendor == 'ZTE' else 'HWTC'
+        return [
+            {'serial_number': f'{prefix}{rng.randint(10000000,99999999):08d}',
+             'vendor_info': f'{prefix} Demo-ONT',
+             'board': 1, 'port': rng.randint(1, 8)}
+            for _ in range(rng.randint(2, 8))
+        ]
+
+    cmds   = _VENDOR_COMMANDS.get(olt.vendor, {})
+    parser = _PARSERS.get(olt.vendor)
+    if not cmds or not parser:
+        return []
+
+    # ZTE supports a global uncfg command
+    global_cmd = cmds.get('uncfg_all')
+    if global_cmd and hasattr(parser, 'parse_uncfg_all'):
+        try:
+            with _ssh_connection(olt) as conn:
+                out = conn.send_command(global_cmd, read_timeout=SSH_TIMEOUT)
+                return parser.parse_uncfg_all(out)
+        except Exception as exc:
+            logger.error('scan_all_uncfg OLT %s: %s', olt.ip_address, exc)
+            return []
+
+    # Fallback: per-port scan across all DB ports
+    results = []
+    for pon_port in olt.pon_ports.all():
+        found = discover_unregistered_onts_sync(olt, pon_port)
+        for f in found:
+            f['board'] = pon_port.board
+            f['port']  = pon_port.port
+            results.append(f)
+    return results
