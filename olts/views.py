@@ -11,9 +11,11 @@ from core.utils import operator_required, admin_required
 
 @login_required
 def olt_list(request):
-    search = request.GET.get('q', '')
-    vendor = request.GET.get('vendor', '')
-    status = request.GET.get('status', '')
+    from django.contrib.auth.models import User as AuthUser
+    search      = request.GET.get('q', '')
+    vendor      = request.GET.get('vendor', '')
+    status      = request.GET.get('status', '')
+    user_filter = request.GET.get('user', '')
 
     olts = _olt_qs(request.user)
     if search:
@@ -26,12 +28,18 @@ def olt_list(request):
         olts = olts.filter(vendor=vendor)
     if status:
         olts = olts.filter(status=status)
+    if user_filter and request.user.is_superuser:
+        olts = olts.filter(owner__id=user_filter)
+
+    all_users = AuthUser.objects.all().order_by('username') if request.user.is_superuser else []
 
     return render(request, 'olts/list.html', {
         'olts': olts,
         'search': search,
         'vendor_filter': vendor,
         'status_filter': status,
+        'user_filter': user_filter,
+        'all_users': all_users,
     })
 
 

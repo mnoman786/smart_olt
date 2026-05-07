@@ -206,8 +206,18 @@
     <option value="offline" {% if status_filter == 'offline' %}selected{% endif %}>Offline</option>
     <option value="warning" {% if status_filter == 'warning' %}selected{% endif %}>Warning</option>
   </select>
+  {% if request.user.is_superuser %}
+  <select name="user" class="form-select form-select-sm" style="max-width:160px;">
+    <option value="">All Users</option>
+    {% for u in all_users %}
+    <option value="{{ u.pk }}" {% if user_filter == u.pk|stringformat:"s" %}selected{% endif %}>
+      {{ u.username }}{% if u.is_superuser %} ★{% endif %}
+    </option>
+    {% endfor %}
+  </select>
+  {% endif %}
   <button type="submit" class="btn btn-sm btn-primary px-4">Search</button>
-  {% if search or vendor_filter or status_filter %}
+  {% if search or vendor_filter or status_filter or user_filter %}
   <a href="{% url 'olt_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
   {% endif %}
   <span class="ms-auto text-muted" style="font-size:0.78rem;">{{ olts|length }} result{{ olts|length|pluralize }}</span>

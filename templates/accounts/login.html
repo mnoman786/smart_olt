@@ -1,6 +1,3 @@
-{% extends 'base.html' %}
-
-{% block auth_content %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,7 +7,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
-    body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); min-height: 100vh; display: flex; align-items: center; font-family: 'Segoe UI', sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', sans-serif; padding: 24px 16px; }
     .login-card { background: #fff; border-radius: 16px; box-shadow: 0 25px 60px rgba(0,0,0,0.4); overflow: hidden; width: 100%; max-width: 440px; }
     .login-header { background: linear-gradient(135deg, #1e40af, #3b82f6); padding: 2.5rem 2rem; text-align: center; color: #fff; }
     .login-header .logo-icon { font-size: 3rem; color: #fbbf24; margin-bottom: 0.5rem; }
@@ -33,9 +31,7 @@
 </head>
 <body>
 <div class="particles" id="particles"></div>
-<div class="container position-relative" style="z-index:1;">
-  <div class="row justify-content-center">
-    <div class="col-auto">
+<div style="position:relative;z-index:1;width:100%;max-width:440px;">
       <div class="login-card">
         <div class="login-header">
           <div class="logo-icon"><i class="fa-solid fa-bolt-lightning"></i></div>
@@ -75,11 +71,6 @@
             <a href="{% url 'register' %}" style="color:#1d4ed8;font-weight:600;">Create one free</a>
           </div>
 
-          <div class="demo-credentials mt-3">
-            <strong><i class="fa-solid fa-circle-info me-1"></i>Demo Credentials:</strong><br>
-            Admin: <code>admin</code> / <code>admin123</code> &nbsp;|&nbsp;
-            Operator: <code>operator1</code> / <code>operator123</code>
-          </div>
         </div>
         <div class="login-footer">
           <i class="fa-solid fa-shield-halved me-1 text-success"></i>
@@ -87,7 +78,6 @@
         </div>
       </div>
     </div>
-  </div>
 </div>
 <script>
   const container = document.getElementById('particles');
@@ -103,4 +93,3 @@
 </script>
 </body>
 </html>
-{% endblock %}
