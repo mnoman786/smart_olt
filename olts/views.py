@@ -66,10 +66,12 @@ def olt_detail(request, pk):
         total_count=Count('onts'),
     ).order_by('board', 'port')
     recent_events = Event.objects.filter(olt=olt).select_related('ont').order_by('-timestamp')[:20]
+    from onts.models import ONTProfile
     return render(request, 'olts/detail.html', {
         'olt': olt,
         'pon_ports': pon_ports,
         'recent_events': recent_events,
+        'ont_profiles': ONTProfile.objects.all(),
     })
 
 
@@ -189,6 +191,56 @@ def pon_snmp_live(request, olt_pk, pon_pk):
         'onts':    onts,
         'error':   '',
     })
+
+
+@login_required
+def olt_snmp_unregistered(request, pk):
+    """Return ONUs visible via SNMP that have no matching registered ONT in the DB."""
+    olt = get_object_or_404(OLT, pk=pk, is_deleted=False)
+    from .snmp_service import get_onu_list_snmp
+    from onts.models import ONT
+
+    try:
+        snmp_onts = get_onu_list_snmp(olt)
+    except Exception as exc:
+        return JsonResponse({'error': str(exc), 'total': 0, 'ports': []})
+
+    # Build a set of registered (board, port, ont_id) tuples and known serials
+    registered = ONT.objects.filter(olt=olt).values_list(
+        'pon_port__board', 'pon_port__port', 'ont_id', 'serial_number'
+    )
+    reg_keys    = {(b, p, oid) for b, p, oid, _ in registered}
+    reg_serials = {s.upper() for _, _, _, s in registered if s}
+
+    unregistered = []
+    for o in snmp_onts:
+        key = (o['board'], o['port'], o['ont_id'])
+        serial = (o.get('serial_number') or '').upper()
+        if key not in reg_keys and (not serial or serial not in reg_serials):
+            unregistered.append(o)
+
+    # Group by port for the frontend
+    port_map = {}
+    for o in unregistered:
+        key = (o['board'], o['port'])
+        if key not in port_map:
+            pon = olt.pon_ports.filter(board=o['board'], port=o['port']).first()
+            port_map[key] = {
+                'board':      o['board'],
+                'port':       o['port'],
+                'port_id':    pon.pk if pon else None,
+                'port_label': pon.port_label if pon else f"Board {o['board']} / Port {o['port']}",
+                'onts':       [],
+            }
+        port_map[key]['onts'].append({
+            'ont_id':        o['ont_id'],
+            'serial':        o.get('serial_number', ''),
+            'status':        o['status'],
+            'rx_power':      o.get('rx_power', 0),
+        })
+
+    ports = sorted(port_map.values(), key=lambda p: (p['board'], p['port']))
+    return JsonResponse({'total': len(unregistered), 'ports': ports, 'error': ''})
 
 
 @login_required

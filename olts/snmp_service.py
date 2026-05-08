@@ -8,8 +8,43 @@ Install:  pip install pysnmp
 """
 from __future__ import annotations
 import logging
+import random
+
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+DEMO_MODE: bool = getattr(settings, 'OLT_DEMO_MODE', False)
+
+# ── Demo data ─────────────────────────────────────────────────────────────────
+
+def _demo_onu_list(vendor: str = 'ZTE') -> list[dict]:
+    """Generate realistic fake ONU data for demo / development use."""
+    random.seed(42)  # stable across reloads
+    _serials_zte    = [f'ZTEG{i:08X}' for i in range(0x1A2B3C00, 0x1A2B3C00 + 48)]
+    _serials_huawei = [f'HWTC{i:08X}' for i in range(0x00AABB00, 0x00AABB00 + 48)]
+    serials = _serials_zte if vendor.upper() != 'HUAWEI' else _serials_huawei
+
+    onts = []
+    idx = 0
+    for port in range(1, 5):          # 4 PON ports
+        count = random.randint(6, 14)
+        for onu_id in range(1, count + 1):
+            online = random.random() > 0.15
+            rx = round(random.uniform(-28.0, -15.0), 2) if online else 0.0
+            tx = round(random.uniform(-5.0, 2.0), 2)   if online else 0.0
+            onts.append({
+                'board':         1,
+                'port':          port,
+                'ont_id':        onu_id,
+                'status':        'online' if online else 'offline',
+                'serial_number': serials[idx % len(serials)],
+                'rx_power':      rx,
+                'tx_power':      tx,
+                'olt_rx_power':  round(rx + random.uniform(-1.0, 1.0), 2) if online else 0.0,
+            })
+            idx += 1
+    return onts
 
 # ── Standard MIB-II OIDs (work on every vendor) ──────────────────────────────
 OID_SYS_DESCR  = '1.3.6.1.2.1.1.1.0'   # firmware / system description
@@ -122,6 +157,11 @@ def check_olt_status_snmp(olt) -> dict:
     Fetches sysDescr + sysUpTime via a single SNMP GET.
     Returns {connected, firmware, uptime_seconds, latency_ms, error}.
     """
+    if DEMO_MODE:
+        vendor = getattr(olt, 'vendor', 'ZTE').upper()
+        fw = 'ZTE ZXAN V2.0.1P2 (demo)' if vendor != 'HUAWEI' else 'Huawei MA5683T V800R013 (demo)'
+        return {'connected': True, 'firmware': fw, 'uptime_seconds': 864000, 'latency_ms': 8, 'error': ''}
+
     import time
     t0 = time.monotonic()
     result = get_olt_stats_snmp(olt)
@@ -141,6 +181,11 @@ def get_olt_stats_snmp(olt) -> dict:
     Returns {connected, firmware, uptime_seconds, error}.
     CPU/memory/temperature still need Telnet (no universal SNMP OID).
     """
+    if DEMO_MODE:
+        vendor = getattr(olt, 'vendor', 'ZTE').upper()
+        fw = 'ZTE ZXAN V2.0.1P2 (demo)' if vendor != 'HUAWEI' else 'Huawei MA5683T V800R013 (demo)'
+        return {'connected': True, 'firmware': fw, 'uptime_seconds': 864000, 'error': ''}
+
     host      = str(olt.ip_address)
     community = olt.snmp_community or 'public'
 
@@ -177,6 +222,9 @@ def get_onu_list_snmp(olt) -> list[dict]:
     For ZTE:   index = board.slot.port.onu_id
     For Huawei: index = slot.port.onu_id
     """
+    if DEMO_MODE:
+        return _demo_onu_list(getattr(olt, 'vendor', 'ZTE'))
+
     host      = str(olt.ip_address)
     community = olt.snmp_community or 'public'
     vendor    = olt.vendor.upper()

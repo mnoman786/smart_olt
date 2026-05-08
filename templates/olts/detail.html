@@ -99,6 +99,132 @@
 </div>
 
 
+<!-- ── Quick Register Modal ── -->
+<div class="modal fade" id="quickRegisterModal" tabindex="-1" aria-labelledby="quickRegModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 20px 60px rgba(0,0,0,0.18);">
+      <div class="modal-header" style="background:linear-gradient(135deg,#0f172a,#1e3a5f);border-radius:14px 14px 0 0;border:none;padding:18px 24px;">
+        <div>
+          <h5 class="modal-title text-white" id="quickRegModalLabel" style="font-weight:800;margin:0;">
+            <i class="fa-solid fa-plus-circle me-2" style="color:#60a5fa;"></i>Register ONU
+          </h5>
+          <div id="qrSubtitle" style="font-size:0.75rem;color:#94a3b8;margin-top:3px;"></div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:24px;">
+
+        <!-- Read-only SNMP info strip -->
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;gap:20px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;font-weight:600;">Serial</div>
+            <div id="qrSerial" style="font-family:monospace;font-size:0.85rem;font-weight:700;color:#1e293b;"></div>
+          </div>
+          <div>
+            <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;font-weight:600;">ONU ID</div>
+            <div id="qrOntId" style="font-size:0.85rem;font-weight:700;color:#1e293b;"></div>
+          </div>
+          <div>
+            <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;font-weight:600;">PON Port</div>
+            <div id="qrPort" style="font-size:0.85rem;font-weight:700;color:#1e293b;"></div>
+          </div>
+          <div>
+            <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;font-weight:600;">RX Power</div>
+            <div id="qrRx" style="font-size:0.85rem;font-weight:700;"></div>
+          </div>
+          <div>
+            <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;font-weight:600;">Status</div>
+            <div id="qrStatus" style="font-size:0.85rem;font-weight:700;"></div>
+          </div>
+        </div>
+
+        <!-- Customer name -->
+        <div class="mb-3">
+          <label style="font-size:0.8rem;font-weight:700;color:#374151;margin-bottom:6px;display:block;">
+            Customer / Device Name <span style="color:#ef4444;">*</span>
+          </label>
+          <input type="text" id="qrName" class="form-control" placeholder="e.g. Ahmed Ali – Apt 301"
+                 style="border-radius:8px;font-size:0.88rem;" autocomplete="off">
+        </div>
+
+        <!-- Technology -->
+        <div class="mb-3">
+          <label style="font-size:0.8rem;font-weight:700;color:#374151;margin-bottom:6px;display:block;">Technology</label>
+          <div class="d-flex gap-2">
+            <label style="flex:1;cursor:pointer;"><input type="radio" name="qrTech" value="GPON" checked style="display:none;"><div class="qr-tech-btn text-center" style="border:1.5px solid #3b82f6;border-radius:8px;padding:7px;font-size:0.78rem;font-weight:700;color:#3b82f6;background:#eff6ff;transition:.15s;">GPON</div></label>
+            <label style="flex:1;cursor:pointer;"><input type="radio" name="qrTech" value="EPON" style="display:none;"><div class="qr-tech-btn text-center" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:7px;font-size:0.78rem;font-weight:700;color:#64748b;transition:.15s;">EPON</div></label>
+            <label style="flex:1;cursor:pointer;"><input type="radio" name="qrTech" value="XGS-PON" style="display:none;"><div class="qr-tech-btn text-center" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:7px;font-size:0.78rem;font-weight:700;color:#64748b;transition:.15s;">XGS-PON</div></label>
+          </div>
+        </div>
+
+        <!-- Mode -->
+        <div class="mb-3">
+          <label style="font-size:0.8rem;font-weight:700;color:#374151;margin-bottom:6px;display:block;">Mode</label>
+          <div class="d-flex gap-2">
+            <label style="flex:1;cursor:pointer;">
+              <input type="radio" name="qrMode" value="routing" checked style="display:none;">
+              <div class="qr-mode-btn text-center" style="border:1.5px solid #3b82f6;border-radius:8px;padding:8px;font-size:0.78rem;font-weight:700;color:#3b82f6;background:#eff6ff;transition:.15s;">
+                <i class="fa-solid fa-route me-1"></i>Routing
+                <div style="font-size:0.62rem;font-weight:400;color:#64748b;margin-top:2px;">ONT handles PPPoE/DHCP</div>
+              </div>
+            </label>
+            <label style="flex:1;cursor:pointer;">
+              <input type="radio" name="qrMode" value="bridging" style="display:none;">
+              <div class="qr-mode-btn text-center" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:8px;font-size:0.78rem;font-weight:700;color:#64748b;transition:.15s;">
+                <i class="fa-solid fa-network-wired me-1"></i>Bridging
+                <div style="font-size:0.62rem;font-weight:400;color:#94a3b8;margin-top:2px;">CPE behind ONT dials PPPoE</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- VLAN + Profile row -->
+        <div class="d-flex gap-3 mb-3">
+          <div style="flex:1;">
+            <label style="font-size:0.8rem;font-weight:700;color:#374151;margin-bottom:6px;display:block;">
+              Service VLAN <span style="color:#ef4444;">*</span>
+            </label>
+            <input type="number" id="qrVlan" class="form-control" value="100" min="1" max="4094"
+                   style="border-radius:8px;font-size:0.88rem;">
+            <div style="font-size:0.68rem;color:#94a3b8;margin-top:4px;">Used in OLT provisioning command</div>
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:0.8rem;font-weight:700;color:#374151;margin-bottom:6px;display:block;">
+              Speed Profile <span style="font-weight:400;color:#94a3b8;">(optional)</span>
+            </label>
+            <select id="qrProfile" class="form-select" style="border-radius:8px;font-size:0.88rem;">
+              <option value="">— No profile —</option>
+              {% for profile in ont_profiles %}
+              <option value="{{ profile.pk }}">{{ profile.name }} ({{ profile.download_speed }}/{{ profile.upload_speed }} Mbps)</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <!-- Description (optional) -->
+        <div class="mb-1">
+          <label style="font-size:0.8rem;font-weight:700;color:#374151;margin-bottom:6px;display:block;">
+            Description <span style="font-weight:400;color:#94a3b8;">(optional)</span>
+          </label>
+          <input type="text" id="qrDesc" class="form-control" placeholder="e.g. Floor 3, Building B"
+                 style="border-radius:8px;font-size:0.88rem;">
+        </div>
+
+        <div id="qrError" class="alert alert-danger d-none mt-3 mb-0" style="border-radius:8px;font-size:0.82rem;padding:10px 14px;"></div>
+        <div id="qrProvWarn" class="alert d-none mt-3 mb-0" style="border-radius:8px;font-size:0.82rem;padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;"></div>
+      </div>
+
+      <div class="modal-footer" style="border:none;padding:0 24px 20px;gap:10px;">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal" style="border-radius:8px;font-size:0.85rem;">Cancel</button>
+        <button type="button" class="btn" id="qrSaveBtn" onclick="submitQuickRegister()"
+                style="background:#3b82f6;color:#fff;border-radius:8px;font-size:0.85rem;font-weight:700;padding:8px 24px;min-width:120px;">
+          <i class="fa-solid fa-check me-1"></i>Register &amp; Provision
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Setup progress banner — shown only when ?setup_task=<id> is in URL -->
 <div id="setupBanner" class="d-none alert mb-3"
      style="background:#1e3a5f;border:1px solid rgba(99,179,237,0.3);color:#e0f2fe;border-radius:10px;">
@@ -325,33 +451,49 @@ function loadSnmpLive() {
     .finally(() => { btn.disabled = false; });
 }
 
-/* ── Scan unregistered ONUs (re-uses existing endpoint, renders inline) ── */
+/* ── Scan unregistered ONUs via SNMP ── */
 function snmpScanUnreg() {
   const btn  = document.getElementById('snmpScanBtn');
   const area = document.getElementById('snmpUnregArea');
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-radar fa-spin me-1"></i>Scanning…';
-  area.innerHTML = `<div class="text-center py-2"><div class="spinner-border spinner-border-sm" style="color:#d97706;" role="status"></div><span style="font-size:0.82rem;color:#92400e;margin-left:8px;">Scanning all PON ports via telnet…</span></div>`;
+  area.innerHTML = `<div class="text-center py-2"><div class="spinner-border spinner-border-sm" style="color:#d97706;" role="status"></div><span style="font-size:0.82rem;color:#92400e;margin-left:8px;">Querying OLT via SNMP…</span></div>`;
 
-  fetch(`/olts/{{ olt.pk }}/scan-all/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+  fetch(`/olts/{{ olt.pk }}/snmp-unregistered/`)
     .then(r => r.json())
     .then(data => {
+      if (data.error) {
+        area.innerHTML = `<div style="color:#b91c1c;font-size:0.82rem;"><i class="fa-solid fa-circle-xmark me-1"></i>${data.error}</div>`;
+        return;
+      }
       if (data.total === 0) {
         area.innerHTML = `<div style="text-align:center;color:#92400e;font-size:0.82rem;"><i class="fa-solid fa-circle-check me-1" style="color:#16a34a;"></i>No unregistered ONUs found on any PON port.</div>`;
         return;
       }
-      let html = `<div style="font-size:0.8rem;font-weight:700;color:#92400e;margin-bottom:10px;">${data.total} device(s) detected across ${data.ports.length} port(s)</div>`;
+      let html = `<div style="font-size:0.8rem;font-weight:700;color:#92400e;margin-bottom:10px;">${data.total} unregistered ONU(s) across ${data.ports.length} port(s)</div>`;
       html += `<div style="display:flex;flex-wrap:wrap;gap:10px;">`;
       data.ports.forEach(port => {
         port.onts.forEach(ont => {
-          const regUrl = `/onts/add/?pon_port=${port.port_id}&serial=${encodeURIComponent(ont.serial)}&olt={{ olt.pk }}`;
+          const rxColor = ont.rx_power >= -25 ? '#15803d' : ont.rx_power >= -30 ? '#92400e' : '#b91c1c';
+          const regPayload = encodeURIComponent(JSON.stringify({
+            board: port.board, port: port.port, ont_id: ont.ont_id,
+            serial: ont.serial, status: ont.status,
+            rx_power: ont.rx_power, port_label: port.port_label,
+          }));
           html += `<div style="background:#fff;border:1.5px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:12px 14px;min-width:200px;flex:1;max-width:280px;">
-            <div style="font-size:0.65rem;color:#92400e;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Board ${port.board} / Port ${port.port}</div>
-            <div style="font-size:0.8rem;font-weight:700;color:#1e293b;font-family:monospace;">${ont.serial}</div>
-            ${ont.equipment_id ? `<div style="font-size:0.68rem;color:#64748b;margin-top:2px;">${ont.equipment_id}</div>` : ''}
-            <a href="${regUrl}" class="btn btn-sm mt-2" style="background:#3b82f6;color:#fff;font-size:0.72rem;padding:4px 12px;border-radius:6px;text-decoration:none;">
+            <div style="font-size:0.65rem;color:#92400e;font-weight:600;text-transform:uppercase;margin-bottom:4px;">${port.port_label}</div>
+            <div style="font-size:0.8rem;font-weight:700;color:#1e293b;font-family:monospace;">${ont.serial || '—'}</div>
+            <div style="font-size:0.68rem;color:#64748b;margin-top:2px;">
+              ONU ID: <strong>${ont.ont_id}</strong>
+              &nbsp;·&nbsp;
+              <span style="color:${ont.status === 'online' ? '#15803d' : '#b91c1c'};font-weight:600;">${ont.status}</span>
+              ${ont.rx_power ? `&nbsp;·&nbsp;<span style="color:${rxColor};font-family:monospace;">${ont.rx_power.toFixed(2)} dBm</span>` : ''}
+            </div>
+            <button onclick='openQuickRegister(${JSON.stringify({board:port.board,port:port.port,ont_id:ont.ont_id,serial:ont.serial,status:ont.status,rx_power:ont.rx_power,port_label:port.port_label})})'
+                    class="btn btn-sm mt-2"
+                    style="background:#3b82f6;color:#fff;font-size:0.72rem;padding:4px 12px;border-radius:6px;border:none;cursor:pointer;">
               <i class="fa-solid fa-plus me-1"></i>Register
-            </a>
+            </button>
           </div>`;
         });
       });
@@ -363,6 +505,133 @@ function snmpScanUnreg() {
       btn.disabled = false;
       btn.innerHTML = '<i class="fa-solid fa-radar me-1"></i>Scan Now';
     });
+}
+
+/* ── Quick Register Modal ── */
+let _qrData = {};
+
+function openQuickRegister(ont) {
+  _qrData = ont;
+  const rxColor = ont.rx_power >= -25 ? '#15803d' : ont.rx_power >= -30 ? '#92400e' : '#b91c1c';
+  document.getElementById('qrSubtitle').textContent = ont.port_label;
+  document.getElementById('qrSerial').textContent   = ont.serial || '—';
+  document.getElementById('qrOntId').textContent    = ont.ont_id;
+  document.getElementById('qrPort').textContent     = ont.port_label;
+  document.getElementById('qrRx').innerHTML = ont.rx_power
+    ? `<span style="color:${rxColor};font-family:monospace;">${ont.rx_power.toFixed(2)} dBm</span>` : '—';
+  document.getElementById('qrStatus').innerHTML = `<span style="color:${ont.status==='online'?'#15803d':'#b91c1c'};">${ont.status}</span>`;
+  document.getElementById('qrName').value  = '';
+  document.getElementById('qrDesc').value  = '';
+  document.getElementById('qrError').classList.add('d-none');
+  document.getElementById('qrSaveBtn').disabled = false;
+  document.getElementById('qrSaveBtn').innerHTML = '<i class="fa-solid fa-check me-1"></i>Register ONU';
+
+  // Set technology radio to match OLT pon_type
+  const defaultTech = '{{ olt.pon_type|default:"GPON" }}'.split('+')[0];
+  document.querySelectorAll('input[name="qrTech"]').forEach(r => {
+    r.checked = r.value === defaultTech;
+    r.closest('label').querySelector('.qr-tech-btn').style.cssText =
+      r.checked ? 'border:1.5px solid #3b82f6;border-radius:8px;padding:7px;font-size:0.78rem;font-weight:700;color:#3b82f6;background:#eff6ff;transition:.15s;'
+                : 'border:1.5px solid #e2e8f0;border-radius:8px;padding:7px;font-size:0.78rem;font-weight:700;color:#64748b;transition:.15s;';
+  });
+
+  new bootstrap.Modal(document.getElementById('quickRegisterModal')).show();
+}
+
+// Style selected tech/mode radio on click
+document.addEventListener('change', e => {
+  if (e.target.name === 'qrTech') {
+    document.querySelectorAll('input[name="qrTech"]').forEach(r => {
+      r.closest('label').querySelector('.qr-tech-btn').style.cssText =
+        r.checked ? 'border:1.5px solid #3b82f6;border-radius:8px;padding:7px;font-size:0.78rem;font-weight:700;color:#3b82f6;background:#eff6ff;transition:.15s;'
+                  : 'border:1.5px solid #e2e8f0;border-radius:8px;padding:7px;font-size:0.78rem;font-weight:700;color:#64748b;transition:.15s;';
+    });
+  }
+  if (e.target.name === 'qrMode') {
+    document.querySelectorAll('input[name="qrMode"]').forEach(r => {
+      r.closest('label').querySelector('.qr-mode-btn').style.cssText =
+        r.checked ? 'border:1.5px solid #3b82f6;border-radius:8px;padding:8px;font-size:0.78rem;font-weight:700;color:#3b82f6;background:#eff6ff;transition:.15s;text-align:center;'
+                  : 'border:1.5px solid #e2e8f0;border-radius:8px;padding:8px;font-size:0.78rem;font-weight:700;color:#64748b;transition:.15s;text-align:center;';
+    });
+  }
+});
+
+function submitQuickRegister() {
+  const name  = document.getElementById('qrName').value.trim();
+  const vlan  = parseInt(document.getElementById('qrVlan').value) || 100;
+  const errEl = document.getElementById('qrError');
+  const warnEl = document.getElementById('qrProvWarn');
+  if (!name) {
+    errEl.textContent = 'Customer name is required.';
+    errEl.classList.remove('d-none');
+    document.getElementById('qrName').focus();
+    return;
+  }
+  errEl.classList.add('d-none');
+  warnEl.classList.add('d-none');
+
+  const tech      = document.querySelector('input[name="qrTech"]:checked')?.value || 'GPON';
+  const mode      = document.querySelector('input[name="qrMode"]:checked')?.value || 'routing';
+  const profileId = document.getElementById('qrProfile').value || null;
+  const btn       = document.getElementById('qrSaveBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Provisioning…';
+
+  fetch('/onts/quick-register/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({
+      olt_id:      {{ olt.pk }},
+      board:       _qrData.board,
+      port:        _qrData.port,
+      ont_id:      _qrData.ont_id,
+      serial:      _qrData.serial,
+      name:        name,
+      technology:  tech,
+      mode:        mode,
+      vlan:        vlan,
+      profile_id:  profileId,
+      status:      _qrData.status,
+      rx_power:    _qrData.rx_power,
+      description: document.getElementById('qrDesc').value.trim(),
+    }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      bootstrap.Modal.getInstance(document.getElementById('quickRegisterModal')).hide();
+
+      // Build banner — show provisioning warning if device command failed
+      const provOk = d.provisioned;
+      const banner = document.createElement('div');
+      banner.className = `alert alert-${provOk ? 'success' : 'warning'} alert-dismissible fade show mb-3`;
+      banner.style.cssText = 'border-radius:10px;';
+      banner.innerHTML = provOk
+        ? `<i class="fa-solid fa-circle-check me-1"></i>
+           <strong>${name}</strong> registered and provisioned on the OLT successfully.
+           <a href="${d.detail_url}" class="alert-link ms-2">View ONT →</a>
+           <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`
+        : `<i class="fa-solid fa-triangle-exclamation me-1"></i>
+           <strong>${name}</strong> saved to database but OLT provisioning failed:
+           <em>${d.provision_error}</em>. Check credentials and try again from the ONT detail page.
+           <a href="${d.detail_url}" class="alert-link ms-2">View ONT →</a>
+           <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+      document.getElementById('snmpLiveArea').before(banner);
+      snmpScanUnreg();
+      loadSnmpLive();
+    } else {
+      errEl.textContent = d.error || 'Registration failed.';
+      errEl.classList.remove('d-none');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Register &amp; Provision';
+    }
+  })
+  .catch(() => {
+    errEl.textContent = 'Network error — please try again.';
+    errEl.classList.remove('d-none');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Register &amp; Provision';
+  });
 }
 
 /* Auto-load SNMP on page open */

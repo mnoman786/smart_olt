@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path('', views.ont_list, name='ont_list'),
     path('add/', views.ont_create, name='ont_create'),
+    path('quick-register/', views.ont_quick_register, name='ont_quick_register'),
     path('profiles/', views.profile_list, name='ont_profiles'),
     path('profiles/add/', views.profile_create, name='profile_create'),
     path('profiles/<int:pk>/edit/', views.profile_edit, name='profile_edit'),

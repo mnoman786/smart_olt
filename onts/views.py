@@ -80,6 +80,106 @@ def ont_create(request):
 
 @login_required
 @operator_required
+def ont_quick_register(request):
+    """
+    Quick-register an ONU discovered via SNMP.
+    1. Saves ONT to the database.
+    2. Sends vendor CLI provisioning commands to the OLT device via Telnet.
+    POST JSON: {olt_id, board, port, ont_id, serial, name, technology,
+                vlan, profile_id, rx_power, tx_power, status}
+    Returns JSON: {success, ont_pk, detail_url, provisioned, provision_error, error}
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+
+    import json
+    from olts.models import OLT, PONPort
+
+    try:
+        data = json.loads(request.body)
+    except (ValueError, TypeError):
+        data = request.POST
+
+    olt_id     = data.get('olt_id')
+    board      = int(data.get('board', 1))
+    port       = int(data.get('port', 1))
+    ont_id     = int(data.get('ont_id', 1))
+    serial     = (data.get('serial') or '').strip()
+    name       = (data.get('name') or '').strip()
+    technology = (data.get('technology') or 'GPON').strip().upper()
+    mode       = 'bridging' if data.get('mode') == 'bridging' else 'routing'
+    vlan       = int(data.get('vlan') or 100)
+    profile_id = data.get('profile_id') or None
+    rx_power   = float(data.get('rx_power') or 0)
+    tx_power   = float(data.get('tx_power') or 0)
+    status     = data.get('status', 'offline')
+
+    if not name:
+        return JsonResponse({'success': False, 'error': 'Customer name is required.'})
+    if not serial:
+        return JsonResponse({'success': False, 'error': 'Serial number is required.'})
+
+    try:
+        olt = OLT.objects.get(pk=olt_id, is_deleted=False)
+    except OLT.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'OLT not found.'})
+
+    if ONT.objects.filter(serial_number=serial).exists():
+        return JsonResponse({'success': False, 'error': f'Serial {serial} is already registered.'})
+
+    profile = None
+    if profile_id:
+        try:
+            profile = ONTProfile.objects.get(pk=profile_id)
+        except ONTProfile.DoesNotExist:
+            pass
+
+    # Find or create the PON port
+    pon_port, _ = PONPort.objects.get_or_create(
+        olt=olt, board=board, port=port,
+        defaults={'technology': technology, 'max_onts': 128, 'status': 'up'},
+    )
+
+    # Save to database
+    ont = ONT.objects.create(
+        olt=olt,
+        pon_port=pon_port,
+        ont_id=ont_id,
+        serial_number=serial,
+        name=name,
+        status='provisioning',
+        technology=technology if technology in ('GPON', 'EPON', 'XGS-PON') else 'GPON',
+        mode=mode,
+        vlan=vlan,
+        profile=profile,
+        rx_power=rx_power,
+        tx_power=tx_power,
+    )
+
+    # Remove from discovered list if present
+    from olts.models import DiscoveredONT
+    DiscoveredONT.objects.filter(serial_number=serial).delete()
+
+    # Send provisioning commands to the OLT device
+    from olts.ssh_service import provision_ont_sync
+    prov = provision_ont_sync(olt, ont)
+
+    if prov['success']:
+        ont.status = status  # restore actual status from SNMP
+        ont.save(update_fields=['status'])
+
+    return JsonResponse({
+        'success':         True,
+        'ont_pk':          ont.pk,
+        'detail_url':      f'/onts/{ont.pk}/',
+        'provisioned':     prov['success'],
+        'provision_error': prov.get('error', ''),
+        'error':           '',
+    })
+
+
+@login_required
+@operator_required
 def ont_edit(request, pk):
     ont = get_object_or_404(ONT, pk=pk)
     if request.method == 'POST':

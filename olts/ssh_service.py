@@ -514,6 +514,139 @@ def _demo_ont_command(command: str) -> dict:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def provision_ont_sync(olt, ont) -> dict:
+    """
+    Send vendor-specific CLI commands to the OLT to provision (register) an ONT.
+    Requires: ont.pon_port (board + port), ont.ont_id, ont.serial_number,
+              ont.vlan, ont.technology, ont.mode ('routing' | 'bridging').
+    Returns {success, output, error}.
+    """
+    if DEMO_MODE:
+        mode_label = 'routing' if getattr(ont, 'mode', 'routing') != 'bridging' else 'bridging'
+        return {
+            'success': True,
+            'output': (
+                f'[DEMO] ONT {ont.serial_number} provisioned — '
+                f'port {ont.pon_port.board}/{ont.pon_port.port} '
+                f'ID {ont.ont_id}  VLAN {ont.vlan}  mode={mode_label}'
+            ),
+            'error': '',
+        }
+
+    vendor  = olt.vendor.upper()
+    board   = ont.pon_port.board
+    port    = ont.pon_port.port
+    ont_id  = ont.ont_id
+    serial  = ont.serial_number
+    vlan    = ont.vlan or 100
+    bridging = getattr(ont, 'mode', 'routing') == 'bridging'
+
+    try:
+        with _telnet_connection(olt) as conn:
+            if vendor == 'ZTE':
+                output = _provision_zte(conn, board, port, ont_id, serial, vlan, bridging)
+            elif vendor == 'HUAWEI':
+                output = _provision_huawei(conn, board, port, ont_id, serial, vlan, bridging)
+            else:
+                return {'success': False, 'output': '', 'error': f'Unsupported vendor: {vendor}'}
+        return {'success': True, 'output': output, 'error': ''}
+    except Exception as exc:
+        logger.error('provision_ont OLT %s ONT %s: %s', olt.ip_address, serial, exc)
+        return {'success': False, 'output': '', 'error': str(exc)}
+
+
+def _provision_zte(conn, board: int, port: int, ont_id: int,
+                   serial: str, vlan: int, bridging: bool = False) -> str:
+    """
+    ZTE ZXAN provisioning sequence.
+
+    Routing mode  — ONU acts as router/PPPoE client; T-CONT + GEM + service-port
+                    with tagged VLAN, WAN-side service configured via OMCI.
+    Bridging mode — ONU transparently passes tagged frames; no WAN IP config
+                    pushed via OMCI.  Service-port maps user-vlan to uplink vlan.
+    """
+    output = []
+
+    # Step 1: bind serial on GPON-OLT port
+    bind_steps = [
+        'configure terminal',
+        f'interface gpon-olt_1/{board}/{port}',
+        f' onu {ont_id} type ZTE-F660 sn {serial}',
+        ' exit',
+    ]
+
+    # Step 2: configure T-CONT and GEM port (same for both modes)
+    gem_steps = [
+        f'interface gpon-onu_1/{board}/{port}:{ont_id}',
+        f' tcont 1 name tc-{ont_id} profile DEFVAL',
+        f' gemport 1 name gm-{ont_id} tcont 1',
+        f' service-port 1 vport 1 user-vlan {vlan} vlan {vlan}',
+        ' exit',
+    ]
+
+    # Step 3: OMCI service config — differs by mode
+    if bridging:
+        omci_steps = [
+            f'pon-onu-mng gpon-onu_1/{board}/{port}:{ont_id}',
+            f' service 1 gemport 1 vlan {vlan}',
+            ' exit',
+            'end',
+        ]
+    else:
+        # Routing: push WAN interface config via OMCI
+        omci_steps = [
+            f'pon-onu-mng gpon-onu_1/{board}/{port}:{ont_id}',
+            f' service 1 gemport 1 vlan {vlan}',
+            f' wan-ip 1 mode pppoe vlan-profile vlan{vlan} host 1',
+            ' exit',
+            'end',
+        ]
+
+    for cmd in bind_steps + gem_steps + omci_steps:
+        out = conn.send_command(cmd, timeout=TELNET_TIMEOUT)
+        output.append(out)
+        if any(e in out.lower() for e in ('error', 'invalid', 'failed', 'unknown command')):
+            raise RuntimeError(f'ZTE provisioning error on "{cmd.strip()}": {out.strip()[:200]}')
+    return '\n'.join(output)
+
+
+def _provision_huawei(conn, board: int, port: int, ont_id: int,
+                      serial: str, vlan: int, bridging: bool = False) -> str:
+    """
+    Huawei MA56xx/MA58xx provisioning sequence.
+
+    Routing mode  — ont ipconfig sets DHCP on the WAN VLAN; the ONT handles
+                    the PPPoE/DHCP negotiation itself.
+    Bridging mode — no ipconfig pushed; the CPE behind the ONT handles DHCP/PPPoE.
+                    service-port maps user-vlan transparently.
+    """
+    output = []
+
+    iface_steps = [
+        f'interface gpon 0/{board}/{port}',
+        f' ont add {ont_id} sn-auth {serial} omci ont-lineprofile-id 1 ont-srvprofile-id 1',
+    ]
+
+    if not bridging:
+        # Routing: configure IP on ONT WAN interface via OMCI
+        iface_steps.append(f' ont ipconfig {ont_id} dhcp vlan {vlan}')
+
+    iface_steps.append(' quit')
+
+    # service-port is the same for both modes — maps GPON GEM port to VLAN
+    svc_step = [
+        f'service-port vlan {vlan} gpon 0/{board}/{port} ont {ont_id} '
+        f'gemport 0 multi-service user-vlan {vlan}',
+    ]
+
+    for cmd in iface_steps + svc_step:
+        out = conn.send_command(cmd, timeout=TELNET_TIMEOUT)
+        output.append(out)
+        if any(e in out.lower() for e in ('error', 'failure', 'invalid')):
+            raise RuntimeError(f'Huawei provisioning error on "{cmd.strip()}": {out.strip()[:200]}')
+    return '\n'.join(output)
+
+
 def _test_telnet_raw(host: str, port: int, username: str, password: str) -> dict:
     """
     Open a Telnet session, log in, then close.

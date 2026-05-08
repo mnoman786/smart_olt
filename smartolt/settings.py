@@ -130,7 +130,7 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_CONCURRENCY', 20))
 
 # ── OLT connectivity ──────────────────────────────────────────────────────────
-OLT_DEMO_MODE = False
+OLT_DEMO_MODE = os.environ.get('OLT_DEMO_MODE', 'False').lower() not in ('false', '0', 'no')
 OLT_SSH_TIMEOUT = int(os.environ.get('OLT_SSH_TIMEOUT', 30))
 OLT_SSH_MAX_CONCURRENT = int(os.environ.get('OLT_SSH_MAX_CONCURRENT', 50))
 

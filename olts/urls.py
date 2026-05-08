@@ -6,6 +6,7 @@ urlpatterns = [
     path('add/', views.olt_create, name='olt_create'),
     path('<int:pk>/', views.olt_detail, name='olt_detail'),
     path('<int:pk>/snmp-live/', views.olt_snmp_live, name='olt_snmp_live'),
+    path('<int:pk>/snmp-unregistered/', views.olt_snmp_unregistered, name='olt_snmp_unregistered'),
     path('<int:olt_pk>/pon/<int:pon_pk>/snmp-live/', views.pon_snmp_live, name='pon_snmp_live'),
     path('<int:pk>/setup-commands/', views.olt_setup_commands, name='olt_setup_commands'),
     path('<int:pk>/edit/', views.olt_edit, name='olt_edit'),
