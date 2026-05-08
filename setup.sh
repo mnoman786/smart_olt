@@ -47,7 +47,6 @@ ExecStart=$PYTHON $APP_DIR/manage.py runserver 0.0.0.0:$PORT
 Restart=always
 RestartSec=5
 Environment=DJANGO_SETTINGS_MODULE=smartolt.settings
-Environment=OLT_DEMO_MODE=true
 
 [Install]
 WantedBy=multi-user.target
