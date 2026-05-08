@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -7,6 +9,8 @@ from .models import OLT, PONPort, DiscoveredONT
 from .forms import OLTForm, PONPortForm
 from monitoring.models import OLTMetrics, Event
 from core.utils import operator_required, admin_required
+
+logger = logging.getLogger('olts.views')
 
 
 @login_required
@@ -138,10 +142,16 @@ def olt_create(request):
 def olt_snmp_live(request, pk):
     """Return live ONU list from SNMP, grouped by PON port."""
     olt = get_object_or_404(OLT, pk=pk, is_deleted=False)
+    logger.info('SNMP Refresh → OLT "%s" (%s)', olt.name, olt.ip_address)
     from .snmp_service import get_onu_list_snmp
     try:
         onts = get_onu_list_snmp(olt)
+        logger.info('SNMP Refresh → found %d ONUs (online: %d, offline: %d)',
+                    len(onts),
+                    sum(1 for o in onts if o['status'] == 'online'),
+                    sum(1 for o in onts if o['status'] != 'online'))
     except Exception as exc:
+        logger.error('SNMP Refresh → OLT "%s" error: %s', olt.name, exc)
         return JsonResponse({'error': str(exc), 'ports': []})
 
     port_map = {}
@@ -197,12 +207,15 @@ def pon_snmp_live(request, olt_pk, pon_pk):
 def olt_snmp_unregistered(request, pk):
     """Return ONUs visible via SNMP that have no matching registered ONT in the DB."""
     olt = get_object_or_404(OLT, pk=pk, is_deleted=False)
+    logger.info('SNMP Scan → OLT "%s" (%s) scanning for unregistered ONUs', olt.name, olt.ip_address)
     from .snmp_service import get_onu_list_snmp
     from onts.models import ONT
 
     try:
         snmp_onts = get_onu_list_snmp(olt)
+        logger.info('SNMP Scan → got %d total ONUs from OLT', len(snmp_onts))
     except Exception as exc:
+        logger.error('SNMP Scan → OLT "%s" error: %s', olt.name, exc)
         return JsonResponse({'error': str(exc), 'total': 0, 'ports': []})
 
     # Build a set of registered (board, port, ont_id) tuples and known serials
@@ -240,6 +253,7 @@ def olt_snmp_unregistered(request, pk):
         })
 
     ports = sorted(port_map.values(), key=lambda p: (p['board'], p['port']))
+    logger.info('SNMP Scan → %d unregistered ONUs found', len(unregistered))
     return JsonResponse({'total': len(unregistered), 'ports': ports, 'error': ''})
 
 

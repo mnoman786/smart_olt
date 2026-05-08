@@ -7,6 +7,12 @@ Install:  pip install puresnmp
 from __future__ import annotations
 import asyncio
 import logging
+import sys
+
+# ProactorEventLoop (Windows default) leaves UDP sockets dangling on close.
+# SelectorEventLoop handles UDP cleanly and works fine for SNMP polling.
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +107,17 @@ def _parse_index(suffix: str) -> tuple[int, int, int, int] | None:
 
 # ── Low-level SNMP calls ──────────────────────────────────────────────────────
 
+def _make_client(host: str, community: str, port: int = 161, timeout: int = 5):
+    from functools import partial
+    from puresnmp import Client, V2C, PyWrapper
+    from puresnmp.transport import send_udp
+    sender = partial(send_udp, timeout=timeout, retries=2)
+    return PyWrapper(Client(host, V2C(community), port=port, sender=sender))
+
+
 async def _async_get(host: str, community: str, oids: list[str],
                      port: int = 161, timeout: int = 5) -> dict[str, any]:
-    from puresnmp import Client, V2C, PyWrapper
-    client = PyWrapper(Client(host, V2C(community), port=port, timeout=timeout))
+    client = _make_client(host, community, port, timeout)
     results = {}
     for oid in oids:
         try:
@@ -116,11 +129,11 @@ async def _async_get(host: str, community: str, oids: list[str],
 
 async def _async_walk(host: str, community: str, base_oid: str,
                       port: int = 161, timeout: int = 5) -> dict[str, any]:
-    from puresnmp import Client, V2C, PyWrapper
-    client = PyWrapper(Client(host, V2C(community), port=port, timeout=timeout))
+    client = _make_client(host, community, port, timeout)
     results = {}
     async for varbind in client.walk(base_oid):
         results[str(varbind.oid)] = varbind.value
+    logger.info('SNMP WALK %s:%s OID %s → %d rows', host, port, base_oid, len(results))
     return results
 
 
@@ -160,8 +173,9 @@ def get_olt_stats_snmp(olt) -> dict:
     """
     host      = str(olt.ip_address)
     community = olt.snmp_community or 'public'
+    port      = getattr(olt, 'snmp_port', 161) or 161
     try:
-        data = _snmp_get(host, community, [OID_SYS_DESCR, OID_SYS_UPTIME])
+        data = _snmp_get(host, community, [OID_SYS_DESCR, OID_SYS_UPTIME], port=port)
         if not data:
             return {'connected': False, 'firmware': '', 'uptime_seconds': 0,
                     'error': 'No SNMP response — check community string and that SNMP is enabled.'}
@@ -184,12 +198,13 @@ def get_onu_list_snmp(olt) -> list[dict]:
     """
     host      = str(olt.ip_address)
     community = olt.snmp_community or 'public'
+    port      = getattr(olt, 'snmp_port', 161) or 161
     vendor    = olt.vendor.upper()
     try:
         if vendor == 'ZTE':
-            return _get_onu_list_zte(host, community)
+            return _get_onu_list_zte(host, community, port)
         elif vendor == 'HUAWEI':
-            return _get_onu_list_huawei(host, community)
+            return _get_onu_list_huawei(host, community, port)
         else:
             logger.warning('SNMP ONU list: unsupported vendor %s', vendor)
             return []
@@ -198,12 +213,12 @@ def get_onu_list_snmp(olt) -> list[dict]:
         return []
 
 
-def _get_onu_list_zte(host: str, community: str) -> list[dict]:
-    state_table  = _snmp_walk(host, community, ZTE_ONU_OPER_STATE)
-    serial_table = _snmp_walk(host, community, ZTE_ONU_SERIAL_NUM)
-    rx_table     = _snmp_walk(host, community, ZTE_ONU_RX_POWER)
-    tx_table     = _snmp_walk(host, community, ZTE_ONU_TX_POWER)
-    olt_rx_table = _snmp_walk(host, community, ZTE_ONU_OLT_RX)
+def _get_onu_list_zte(host: str, community: str, port: int = 161) -> list[dict]:
+    state_table  = _snmp_walk(host, community, ZTE_ONU_OPER_STATE, port=port)
+    serial_table = _snmp_walk(host, community, ZTE_ONU_SERIAL_NUM, port=port)
+    rx_table     = _snmp_walk(host, community, ZTE_ONU_RX_POWER,   port=port)
+    tx_table     = _snmp_walk(host, community, ZTE_ONU_TX_POWER,   port=port)
+    olt_rx_table = _snmp_walk(host, community, ZTE_ONU_OLT_RX,     port=port)
 
     results = []
     for full_oid, state_val in state_table.items():
@@ -211,11 +226,11 @@ def _get_onu_list_zte(host: str, community: str) -> list[dict]:
         idx    = _parse_index(suffix)
         if not idx:
             continue
-        board, slot, port, onu_id = idx
+        board, slot, pon_port, onu_id = idx
         status = 'online' if str(state_val).strip() in ('1', 'online') else 'offline'
         results.append({
             'board':         board,
-            'port':          port,
+            'port':          pon_port,
             'ont_id':        onu_id,
             'status':        status,
             'serial_number': _decode_serial(serial_table.get(f'{ZTE_ONU_SERIAL_NUM}.{suffix}', b'')),
@@ -226,11 +241,11 @@ def _get_onu_list_zte(host: str, community: str) -> list[dict]:
     return results
 
 
-def _get_onu_list_huawei(host: str, community: str) -> list[dict]:
-    state_table  = _snmp_walk(host, community, HW_ONU_RUN_STATE)
-    serial_table = _snmp_walk(host, community, HW_ONU_SERIAL_NUM)
-    rx_table     = _snmp_walk(host, community, HW_ONU_RX_POWER)
-    tx_table     = _snmp_walk(host, community, HW_ONU_TX_POWER)
+def _get_onu_list_huawei(host: str, community: str, port: int = 161) -> list[dict]:
+    state_table  = _snmp_walk(host, community, HW_ONU_RUN_STATE,  port=port)
+    serial_table = _snmp_walk(host, community, HW_ONU_SERIAL_NUM, port=port)
+    rx_table     = _snmp_walk(host, community, HW_ONU_RX_POWER,   port=port)
+    tx_table     = _snmp_walk(host, community, HW_ONU_TX_POWER,   port=port)
 
     results = []
     for full_oid, state_val in state_table.items():
@@ -238,11 +253,11 @@ def _get_onu_list_huawei(host: str, community: str) -> list[dict]:
         idx    = _parse_index(suffix)
         if not idx:
             continue
-        board, slot, port, onu_id = idx
+        board, slot, pon_port, onu_id = idx
         status = 'online' if str(state_val).strip() == '1' else 'offline'
         results.append({
             'board':         board,
-            'port':          port,
+            'port':          pon_port,
             'ont_id':        onu_id,
             'status':        status,
             'serial_number': _decode_serial(serial_table.get(f'{HW_ONU_SERIAL_NUM}.{suffix}', b'')),

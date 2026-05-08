@@ -137,3 +137,28 @@ OLT_SSH_MAX_CONCURRENT = int(os.environ.get('OLT_SSH_MAX_CONCURRENT', 50))
 # Set USE_CELERY=False in .env to run all tasks synchronously (no Redis needed)
 USE_CELERY = os.environ.get('USE_CELERY', 'True').lower() not in ('false', '0', 'no')
 
+# ── Logging ───────────────────────────────────────────────────────────────────
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '[%(asctime)s] %(levelname)s %(name)s: %(message)s',
+            'datefmt': '%H:%M:%S',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'loggers': {
+        'olts': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+

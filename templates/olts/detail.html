@@ -357,16 +357,23 @@ function loadSnmpLive() {
     .then(r => r.json())
     .then(data => {
       if (data.error) {
-        area.innerHTML = `<div class="alert alert-danger" style="border-radius:12px;">
-          <i class="fa-solid fa-circle-xmark me-1"></i><strong>SNMP Error:</strong> ${data.error}
+        area.innerHTML = `<div class="text-center py-4" style="background:#fff1f2;border-radius:14px;border:1.5px dashed #fca5a5;">
+          <i class="fa-solid fa-triangle-exclamation fa-2x mb-2 d-block" style="color:#dc2626;"></i>
+          <div style="font-size:0.95rem;font-weight:700;color:#991b1b;">OLT is not set up properly</div>
+          <div style="font-size:0.78rem;color:#b91c1c;margin-top:6px;">${data.error}</div>
         </div>`;
         return;
       }
       if (!data.ports || data.ports.length === 0) {
-        area.innerHTML = `<div class="text-center py-4" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
-          <i class="fa-solid fa-broadcast-tower fa-2x mb-2 d-block" style="color:#cbd5e1;"></i>
-          <div style="font-size:0.9rem;font-weight:700;color:#475569;">No ONUs found via SNMP</div>
-          <div style="font-size:0.78rem;color:#94a3b8;margin-top:4px;">Check SNMP community string and that SNMP is enabled on the OLT.</div>
+        area.innerHTML = `<div class="text-center py-4" style="background:#fff7ed;border-radius:14px;border:1.5px dashed #fdba74;">
+          <i class="fa-solid fa-triangle-exclamation fa-2x mb-2 d-block" style="color:#f97316;"></i>
+          <div style="font-size:0.95rem;font-weight:700;color:#9a3412;">OLT is not set up properly</div>
+          <div style="font-size:0.8rem;color:#c2410c;margin-top:6px;">No ONUs returned via SNMP. Please check:</div>
+          <ul style="font-size:0.78rem;color:#92400e;margin-top:6px;text-align:left;display:inline-block;">
+            <li>SNMP community string is correct</li>
+            <li>SNMP is enabled on the OLT</li>
+            <li>OLT IP and port are reachable</li>
+          </ul>
         </div>`;
         return;
       }
@@ -635,7 +642,13 @@ function submitQuickRegister() {
 }
 
 /* Auto-load SNMP on page open */
-document.addEventListener('DOMContentLoaded', loadSnmpLive);
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('snmpLiveArea').innerHTML = `
+    <div class="text-center py-4" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
+      <i class="fa-solid fa-hand-pointer fa-2x mb-2 d-block" style="color:#94a3b8;"></i>
+      <div style="font-size:0.9rem;font-weight:600;color:#475569;">Click <strong>Refresh</strong> to load live ONU data</div>
+    </div>`;
+});
 
 function updateStatusBadge(status) {
   const badge = document.getElementById('oltStatusBadge');
