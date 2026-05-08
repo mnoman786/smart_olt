@@ -1,167 +1,177 @@
 """
 SNMP service for OLT monitoring.
 
-Used for all read/polling operations (ONU list, status, optical power,
-CPU, memory). Telnet is kept only for write operations (reboot, provision).
-
-Install:  pip install pysnmp
+Uses puresnmp — a modern, pure-Python SNMP library with no legacy dependencies.
+Install:  pip install puresnmp
 """
 from __future__ import annotations
+import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
 
-# ── Standard MIB-II OIDs (work on every vendor) ──────────────────────────────
-OID_SYS_DESCR  = '1.3.6.1.2.1.1.1.0'   # firmware / system description
-OID_SYS_UPTIME = '1.3.6.1.2.1.1.3.0'   # uptime in hundredths of a second
-OID_SYS_NAME   = '1.3.6.1.2.1.1.5.0'   # hostname
+# ── Standard MIB-II OIDs ─────────────────────────────────────────────────────
+OID_SYS_DESCR  = '1.3.6.1.2.1.1.1.0'
+OID_SYS_UPTIME = '1.3.6.1.2.1.1.3.0'
 
 # ── ZTE ZXAN GPON OIDs ────────────────────────────────────────────────────────
-# Table index format: board.slot.port.onu_id  (e.g. 1.1.1.1)
-ZTE_ONU_OPER_STATE  = '1.3.6.1.4.1.3902.1015.1010.1.1.1.5'   # 1=online 2=offline
-ZTE_ONU_SERIAL_NUM  = '1.3.6.1.4.1.3902.1015.1010.1.1.1.6'
-ZTE_ONU_TYPE        = '1.3.6.1.4.1.3902.1015.1010.1.1.1.3'
-ZTE_ONU_RX_POWER    = '1.3.6.1.4.1.3902.1015.1010.2.1.1.4'   # unit: 0.01 dBm
-ZTE_ONU_TX_POWER    = '1.3.6.1.4.1.3902.1015.1010.2.1.1.5'   # unit: 0.01 dBm
-ZTE_ONU_OLT_RX      = '1.3.6.1.4.1.3902.1015.1010.2.1.1.6'   # unit: 0.01 dBm
+ZTE_ONU_OPER_STATE = '1.3.6.1.4.1.3902.1015.1010.1.1.1.5'   # 1=online 2=offline
+ZTE_ONU_SERIAL_NUM = '1.3.6.1.4.1.3902.1015.1010.1.1.1.6'
+ZTE_ONU_RX_POWER   = '1.3.6.1.4.1.3902.1015.1010.2.1.1.4'   # unit: 0.01 dBm
+ZTE_ONU_TX_POWER   = '1.3.6.1.4.1.3902.1015.1010.2.1.1.5'   # unit: 0.01 dBm
+ZTE_ONU_OLT_RX     = '1.3.6.1.4.1.3902.1015.1010.2.1.1.6'   # unit: 0.01 dBm
 
 # ── Huawei MA56xx/MA58xx GPON OIDs ───────────────────────────────────────────
-# Table index format: slot.port.onu_id
-HW_ONU_RUN_STATE    = '1.3.6.1.4.1.2011.6.128.1.1.2.46.1.15'  # 1=online 5=offline
-HW_ONU_SERIAL_NUM   = '1.3.6.1.4.1.2011.6.128.1.1.2.46.1.2'
-HW_ONU_RX_POWER     = '1.3.6.1.4.1.2011.6.128.1.1.2.51.1.4'   # unit: 0.01 dBm
-HW_ONU_TX_POWER     = '1.3.6.1.4.1.2011.6.128.1.1.2.51.1.3'   # unit: 0.01 dBm
+HW_ONU_RUN_STATE   = '1.3.6.1.4.1.2011.6.128.1.1.2.46.1.15'  # 1=online 5=offline
+HW_ONU_SERIAL_NUM  = '1.3.6.1.4.1.2011.6.128.1.1.2.46.1.2'
+HW_ONU_RX_POWER    = '1.3.6.1.4.1.2011.6.128.1.1.2.51.1.4'   # unit: 0.01 dBm
+HW_ONU_TX_POWER    = '1.3.6.1.4.1.2011.6.128.1.1.2.51.1.3'   # unit: 0.01 dBm
 
 
-# ── Low-level helpers ─────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _snmp_get(host: str, community: str, oids: list[str], port: int = 161,
-              timeout: int = 5, retries: int = 2) -> dict[str, str]:
+def _run(coro):
+    """Run an async coroutine from sync Django code."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
+def _decode_serial(value) -> str:
     """
-    SNMP GET for one or more scalar OIDs.
-    Returns {oid: value_str} for each OID.
+    Decode an SNMP OctetString serial number to a printable string.
+    Vendors encode as 4 ASCII chars + 4 raw bytes: e.g. HWTC + \\x00\\xaa\\xbb\\x12
+    → 'HWTC00AABB12'
     """
-    from pysnmp.hlapi import (
-        getCmd, SnmpEngine, CommunityData, UdpTransportTarget,
-        ContextData, ObjectType, ObjectIdentity,
-    )
-    results = {}
-    error_indication, error_status, _, var_binds = next(
-        getCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=1),   # mpModel=1 → SNMPv2c
-            UdpTransportTarget((host, port), timeout=timeout, retries=retries),
-            ContextData(),
-            *[ObjectType(ObjectIdentity(oid)) for oid in oids],
-        )
-    )
-    if error_indication or error_status:
-        logger.debug('SNMP GET %s: %s %s', host, error_indication, error_status)
-        return results
-    for var_bind in var_binds:
-        oid_str, val = var_bind
-        results[str(oid_str)] = str(val)
-    return results
+    if isinstance(value, bytes):
+        raw = value
+    elif isinstance(value, str):
+        # puresnmp may return hex string like '0x4857544300AABB12'
+        if value.startswith('0x'):
+            try:
+                raw = bytes.fromhex(value[2:])
+            except ValueError:
+                return value
+        else:
+            return value
+    else:
+        return str(value)
+
+    if len(raw) == 8:
+        prefix = raw[:4].decode('ascii', errors='replace')
+        suffix = raw[4:].hex().upper()
+        return prefix + suffix
+    try:
+        return raw.decode('ascii', errors='replace').strip('\x00')
+    except Exception:
+        return raw.hex().upper()
 
 
-def _snmp_walk(host: str, community: str, base_oid: str, port: int = 161,
-               timeout: int = 5, retries: int = 2) -> dict[str, str]:
-    """
-    SNMP WALK under base_oid.
-    Returns {full_oid_str: value_str} for every leaf found.
-    """
-    from pysnmp.hlapi import (
-        nextCmd, SnmpEngine, CommunityData, UdpTransportTarget,
-        ContextData, ObjectType, ObjectIdentity,
-    )
-    results = {}
-    for error_indication, error_status, _, var_binds in nextCmd(
-        SnmpEngine(),
-        CommunityData(community, mpModel=1),
-        UdpTransportTarget((host, port), timeout=timeout, retries=retries),
-        ContextData(),
-        ObjectType(ObjectIdentity(base_oid)),
-        lexicographicMode=False,
-    ):
-        if error_indication or error_status:
-            break
-        for var_bind in var_binds:
-            oid_str, val = var_bind
-            results[str(oid_str)] = str(val)
-    return results
+def _to_power(value) -> float:
+    """Convert raw 0.01 dBm integer to float dBm."""
+    try:
+        return round(int(value) / 100.0, 2)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _index_suffix(full_oid: str, base_oid: str) -> str:
-    """Return the index part after the base OID. e.g. '1.1.1.2' """
     return full_oid[len(base_oid):].lstrip('.')
 
 
 def _parse_index(suffix: str) -> tuple[int, int, int, int] | None:
-    """
-    Parse a 4-part index (board.slot.port.onu_id) or 3-part (slot.port.onu_id).
-    Returns (board, slot, port, onu_id) or None if it can't be parsed.
-    """
     parts = suffix.split('.')
     try:
         if len(parts) == 4:
-            board, slot, port, onu_id = (int(p) for p in parts)
-            return board, slot, port, onu_id
+            b, s, p, o = (int(x) for x in parts)
+            return b, s, p, o
         if len(parts) == 3:
-            slot, port, onu_id = (int(p) for p in parts)
-            return 1, slot, port, onu_id
+            s, p, o = (int(x) for x in parts)
+            return 1, s, p, o
     except ValueError:
         pass
     return None
+
+
+# ── Low-level SNMP calls ──────────────────────────────────────────────────────
+
+async def _async_get(host: str, community: str, oids: list[str],
+                     port: int = 161, timeout: int = 5) -> dict[str, any]:
+    from puresnmp import Client, V2C, PyWrapper
+    client = PyWrapper(Client(host, V2C(community), port=port, timeout=timeout))
+    results = {}
+    for oid in oids:
+        try:
+            results[oid] = await client.get(oid)
+        except Exception as exc:
+            logger.debug('SNMP GET %s [%s]: %s', host, oid, exc)
+    return results
+
+
+async def _async_walk(host: str, community: str, base_oid: str,
+                      port: int = 161, timeout: int = 5) -> dict[str, any]:
+    from puresnmp import Client, V2C, PyWrapper
+    client = PyWrapper(Client(host, V2C(community), port=port, timeout=timeout))
+    results = {}
+    async for varbind in client.walk(base_oid):
+        results[str(varbind.oid)] = varbind.value
+    return results
+
+
+def _snmp_get(host: str, community: str, oids: list[str],
+              port: int = 161, timeout: int = 5) -> dict[str, any]:
+    return _run(_async_get(host, community, oids, port, timeout))
+
+
+def _snmp_walk(host: str, community: str, base_oid: str,
+               port: int = 161, timeout: int = 5) -> dict[str, any]:
+    return _run(_async_walk(host, community, base_oid, port, timeout))
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def check_olt_status_snmp(olt) -> dict:
     """
-    Lightweight SNMP reachability check — determines online/offline status.
-    Fetches sysDescr + sysUpTime via a single SNMP GET.
+    Lightweight SNMP reachability check.
     Returns {connected, firmware, uptime_seconds, latency_ms, error}.
     """
     import time
     t0 = time.monotonic()
     result = get_olt_stats_snmp(olt)
-    latency_ms = int((time.monotonic() - t0) * 1000)
     return {
         'connected':      result['connected'],
         'firmware':       result.get('firmware', ''),
         'uptime_seconds': result.get('uptime_seconds', 0),
-        'latency_ms':     latency_ms,
+        'latency_ms':     int((time.monotonic() - t0) * 1000),
         'error':          result.get('error', ''),
     }
 
 
 def get_olt_stats_snmp(olt) -> dict:
     """
-    Fetch system description and uptime via standard MIB-II OIDs.
+    Fetch sysDescr and sysUpTime via standard MIB-II OIDs.
     Returns {connected, firmware, uptime_seconds, error}.
     """
     host      = str(olt.ip_address)
     community = olt.snmp_community or 'public'
-
     try:
         data = _snmp_get(host, community, [OID_SYS_DESCR, OID_SYS_UPTIME])
         if not data:
             return {'connected': False, 'firmware': '', 'uptime_seconds': 0,
                     'error': 'No SNMP response — check community string and that SNMP is enabled.'}
-
-        firmware = data.get(OID_SYS_DESCR, '')
-        uptime_raw = data.get(OID_SYS_UPTIME, '0')
+        firmware   = str(data.get(OID_SYS_DESCR, ''))
+        uptime_raw = data.get(OID_SYS_UPTIME, 0)
         try:
-            uptime_seconds = int(uptime_raw.split(' ')[0]) // 100
+            uptime_seconds = int(str(uptime_raw).split(' ')[0]) // 100
         except (ValueError, IndexError):
             uptime_seconds = 0
-
-        return {
-            'connected':      True,
-            'firmware':       firmware[:100],
-            'uptime_seconds': uptime_seconds,
-            'error':          '',
-        }
+        return {'connected': True, 'firmware': firmware[:100], 'uptime_seconds': uptime_seconds, 'error': ''}
     except Exception as exc:
         logger.error('SNMP stats OLT %s: %s', host, exc)
         return {'connected': False, 'firmware': '', 'uptime_seconds': 0, 'error': str(exc)}
@@ -169,16 +179,12 @@ def get_olt_stats_snmp(olt) -> dict:
 
 def get_onu_list_snmp(olt) -> list[dict]:
     """
-    Walk the vendor GPON ONU table and return a list of:
-      {ont_id, board, port, status, serial_number, rx_power, tx_power, olt_rx_power}
-
-    For ZTE:    index = board.slot.port.onu_id
-    For Huawei: index = slot.port.onu_id
+    Walk the vendor GPON ONU table.
+    Returns list of {board, port, ont_id, status, serial_number, rx_power, tx_power, olt_rx_power}.
     """
     host      = str(olt.ip_address)
     community = olt.snmp_community or 'public'
     vendor    = olt.vendor.upper()
-
     try:
         if vendor == 'ZTE':
             return _get_onu_list_zte(host, community)
@@ -206,27 +212,17 @@ def _get_onu_list_zte(host: str, community: str) -> list[dict]:
         if not idx:
             continue
         board, slot, port, onu_id = idx
-
-        status = 'online' if state_val.strip() in ('1', 'online') else 'offline'
-
-        def _power(table, base, sfx):
-            val = table.get(f'{base}.{sfx}', '0')
-            try:
-                return round(int(val) / 100.0, 2)
-            except ValueError:
-                return 0.0
-
+        status = 'online' if str(state_val).strip() in ('1', 'online') else 'offline'
         results.append({
             'board':         board,
             'port':          port,
             'ont_id':        onu_id,
             'status':        status,
-            'serial_number': serial_table.get(f'{ZTE_ONU_SERIAL_NUM}.{suffix}', ''),
-            'rx_power':      _power(rx_table,     ZTE_ONU_RX_POWER, suffix),
-            'tx_power':      _power(tx_table,     ZTE_ONU_TX_POWER, suffix),
-            'olt_rx_power':  _power(olt_rx_table, ZTE_ONU_OLT_RX,  suffix),
+            'serial_number': _decode_serial(serial_table.get(f'{ZTE_ONU_SERIAL_NUM}.{suffix}', b'')),
+            'rx_power':      _to_power(rx_table.get(f'{ZTE_ONU_RX_POWER}.{suffix}', 0)),
+            'tx_power':      _to_power(tx_table.get(f'{ZTE_ONU_TX_POWER}.{suffix}', 0)),
+            'olt_rx_power':  _to_power(olt_rx_table.get(f'{ZTE_ONU_OLT_RX}.{suffix}', 0)),
         })
-
     return results
 
 
@@ -243,25 +239,15 @@ def _get_onu_list_huawei(host: str, community: str) -> list[dict]:
         if not idx:
             continue
         board, slot, port, onu_id = idx
-
-        status = 'online' if state_val.strip() == '1' else 'offline'
-
-        def _power(table, base, sfx):
-            val = table.get(f'{base}.{sfx}', '0')
-            try:
-                return round(int(val) / 100.0, 2)
-            except ValueError:
-                return 0.0
-
+        status = 'online' if str(state_val).strip() == '1' else 'offline'
         results.append({
             'board':         board,
             'port':          port,
             'ont_id':        onu_id,
             'status':        status,
-            'serial_number': serial_table.get(f'{HW_ONU_SERIAL_NUM}.{suffix}', ''),
-            'rx_power':      _power(rx_table, HW_ONU_RX_POWER, suffix),
-            'tx_power':      _power(tx_table, HW_ONU_TX_POWER, suffix),
+            'serial_number': _decode_serial(serial_table.get(f'{HW_ONU_SERIAL_NUM}.{suffix}', b'')),
+            'rx_power':      _to_power(rx_table.get(f'{HW_ONU_RX_POWER}.{suffix}', 0)),
+            'tx_power':      _to_power(tx_table.get(f'{HW_ONU_TX_POWER}.{suffix}', 0)),
             'olt_rx_power':  0.0,
         })
-
     return results
