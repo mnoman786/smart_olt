@@ -36,87 +36,6 @@
 .hero-stat .v { font-size: 1.6rem; font-weight: 800; line-height: 1; }
 .hero-stat .l { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; margin-top: 2px; }
 
-/* ── PON Device Panel ── */
-.pon-panel-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
-}
-
-.pon-panel {
-  background: #fff;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 14px;
-  overflow: hidden;
-  text-decoration: none !important;
-  display: block;
-  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
-}
-.pon-panel:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.10);
-  border-color: #3b82f6;
-}
-
-/* port status left-border accent */
-.pon-panel.ps-up       { border-left: 4px solid #22c55e; }
-.pon-panel.ps-down     { border-left: 4px solid #ef4444; }
-.pon-panel.ps-degraded { border-left: 4px solid #f59e0b; }
-.pon-panel.ps-unknown  { border-left: 4px solid #94a3b8; }
-
-.pon-panel-head {
-  padding: 14px 16px 10px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.pon-port-title { font-size: 1rem; font-weight: 700; color: #1e293b; }
-.pon-port-sub   { font-size: 0.68rem; color: #94a3b8; margin-top: 2px; }
-
-.port-status-badge {
-  font-size: 0.65rem; font-weight: 700; padding: 3px 9px; border-radius: 20px;
-}
-.psb-up       { background: #dcfce7; color: #15803d; }
-.psb-down     { background: #fee2e2; color: #b91c1c; }
-.psb-degraded { background: #fef9c3; color: #92400e; }
-.psb-unknown  { background: #f1f5f9; color: #64748b; }
-
-/* ── ONT Dot Grid ── */
-.ont-dot-grid {
-  display: flex; flex-wrap: wrap; gap: 3px;
-  padding: 10px 16px 12px;
-  min-height: 50px;
-}
-.ont-dot {
-  width: 10px; height: 10px; border-radius: 2px;
-  flex-shrink: 0;
-}
-.dot-online  { background: #22c55e; }
-.dot-offline { background: #ef4444; }
-.dot-alarm   { background: #f59e0b; }
-.dot-free    { background: #e2e8f0; }
-
-/* ── PON Footer Stats ── */
-.pon-panel-stats {
-  display: flex; border-top: 1px solid #f1f5f9;
-}
-.pon-panel-stat {
-  flex: 1; padding: 8px 4px; text-align: center; border-right: 1px solid #f1f5f9;
-}
-.pon-panel-stat:last-child { border-right: none; }
-.pon-panel-stat .sv { font-size: 1rem; font-weight: 800; line-height: 1; }
-.pon-panel-stat .sl { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-top: 1px; }
-
-.pon-panel-footer {
-  background: #f8fafc;
-  border-top: 1px solid #f1f5f9;
-  padding: 8px 16px;
-  font-size: 0.72rem; color: #94a3b8;
-  display: flex; align-items: center; justify-content: space-between;
-}
-
-/* Legend */
-.dot-legend { display: flex; gap: 12px; align-items: center; font-size: 0.75rem; color: #64748b; flex-wrap: wrap; }
-.dot-legend span { display: flex; align-items: center; gap: 5px; }
-.leg-sq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 </style>
 {% endblock %}
 
@@ -141,17 +60,6 @@
         <i class="fa-solid fa-circle me-1" style="font-size:0.55rem;"></i>{{ olt.get_status_display }}
       </span>
       {% if request.user.profile.is_operator %}
-      <button class="btn btn-sm btn-outline-light" id="testConnBtn" onclick="testConnection({{ olt.pk }})">
-        <i class="fa-solid fa-plug me-1"></i>Test Connection
-      </button>
-      <button class="btn btn-sm" id="syncDeviceBtn" onclick="syncDevice()"
-              style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.5);color:#93c5fd;">
-        <i class="fa-solid fa-rotate me-1"></i>Sync from Device
-      </button>
-      <button class="btn btn-sm" id="scanAllBtn" onclick="scanAllPorts()"
-              style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.5);color:#fde68a;">
-        <i class="fa-solid fa-radar me-1"></i>Scan Unregistered ONTs
-      </button>
       <a href="{% url 'olt_setup_commands' olt.pk %}" class="btn btn-sm"
          style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.5);color:#c4b5fd;"
          title="View OLT configuration commands">
@@ -190,7 +98,6 @@
   </div>
 </div>
 
-<div id="sshAlert" class="alert d-none mb-3"></div>
 
 <!-- Setup progress banner — shown only when ?setup_task=<id> is in URL -->
 <div id="setupBanner" class="d-none alert mb-3"
@@ -204,114 +111,39 @@
   </div>
 </div>
 
-<!-- ── PON Ports ── -->
-<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-  <div>
-    <h5 style="font-weight:700;margin:0;">PON Ports</h5>
-    <div style="font-size:0.78rem;color:#64748b;margin-top:2px;">Click any port to view and manage its connected devices</div>
-  </div>
-  <div class="dot-legend">
-    <span><span class="leg-sq" style="background:#22c55e;"></span> Online</span>
-    <span><span class="leg-sq" style="background:#ef4444;"></span> Offline</span>
-    <span><span class="leg-sq" style="background:#f59e0b;"></span> Alarm</span>
-    <span><span class="leg-sq" style="background:#e2e8f0;"></span> Free</span>
-  </div>
-</div>
 
-<!-- ── Scan Results ── -->
-<div id="scanResults" class="d-none mb-4">
-  <div class="d-flex align-items-center justify-content-between mb-3">
+<!-- ── SNMP Live Status ── -->
+<div class="mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div>
-      <h5 style="font-weight:700;margin:0;">Unregistered ONTs Found</h5>
-      <div id="scanSummary" style="font-size:0.78rem;color:#64748b;margin-top:2px;"></div>
+      <h5 style="font-weight:700;margin:0;"><i class="fa-solid fa-broadcast-tower me-2 text-primary"></i>SNMP Live Status</h5>
+      <div style="font-size:0.78rem;color:#64748b;margin-top:2px;">Real-time ONU data polled directly from the OLT via SNMP</div>
     </div>
-    <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('scanResults').classList.add('d-none')">
-      <i class="fa-solid fa-xmark me-1"></i>Dismiss
+    <button class="btn btn-sm btn-outline-primary" id="snmpRefreshBtn" onclick="loadSnmpLive()">
+      <i class="fa-solid fa-rotate me-1"></i>Refresh
     </button>
   </div>
-  <div id="scanResultsBody"></div>
-</div>
-
-{% if pon_ports %}
-<div class="pon-panel-grid">
-  {% for port in pon_ports %}
-  <a href="{% url 'pon_detail' olt.pk port.pk %}" class="pon-panel ps-{{ port.status }}">
-
-    <!-- Header -->
-    <div class="pon-panel-head">
-      <div>
-        <div class="pon-port-title">
-          <i class="fa-solid fa-circle-nodes me-1" style="color:#3b82f6;font-size:0.85rem;"></i>
-          Board {{ port.board }} / Port {{ port.port }}
-        </div>
-        <div class="pon-port-sub">{{ port.port_label }} &nbsp;·&nbsp; {{ port.technology }}</div>
-      </div>
-      <span class="port-status-badge psb-{{ port.status }}">{{ port.get_status_display }}</span>
+  <div id="snmpLiveArea">
+    <div id="snmpLoading" class="text-center py-4" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
+      <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+      <div style="font-size:0.82rem;color:#64748b;">Loading SNMP data…</div>
     </div>
-
-    <!-- ONT Dot Grid — rendered by JS using data attributes -->
-    <div class="ont-dot-grid"
-         data-online="{{ port.online_count }}"
-         data-offline="{{ port.offline_count }}"
-         data-total="{{ port.total_count }}"
-         data-max="{{ port.max_onts }}">
-    </div>
-
-    <!-- Stat row -->
-    <div class="pon-panel-stats">
-      <div class="pon-panel-stat">
-        <div class="sv text-success">{{ port.online_count }}</div>
-        <div class="sl">Online</div>
-      </div>
-      <div class="pon-panel-stat">
-        <div class="sv text-danger">{{ port.offline_count }}</div>
-        <div class="sl">Offline</div>
-      </div>
-      <div class="pon-panel-stat">
-        <div class="sv" style="color:#64748b;">{{ port.total_count }}</div>
-        <div class="sl">Registered</div>
-      </div>
-      <div class="pon-panel-stat">
-        <div class="sv" style="color:#94a3b8;">{{ port.max_onts }}</div>
-        <div class="sl">Capacity</div>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="pon-panel-footer">
-      <span>
-        {% widthratio port.total_count port.max_onts 100 %}% used
-      </span>
-      <span style="color:#3b82f6;font-weight:600;">
-        View ONTs <i class="fa-solid fa-arrow-right ms-1" style="font-size:0.65rem;"></i>
-      </span>
-    </div>
-
-  </a>
-  {% endfor %}
-</div>
-
-{% else %}
-<div class="text-center py-5" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
-  <i class="fa-solid fa-circle-nodes fa-3x mb-3 d-block" style="color:#cbd5e1;"></i>
-  <div style="font-size:1rem;font-weight:700;color:#475569;margin-bottom:6px;">No PON Ports Found</div>
-  <div style="font-size:0.82rem;color:#94a3b8;max-width:380px;margin:0 auto 18px;">
-    {% if olt.status == 'online' %}
-      The device is reachable but no ports were auto-discovered yet.
-      Click <strong>Sync from Device</strong> above to pull the port and ONT list directly from the OLT.
-    {% else %}
-      Connect to this OLT first (use <strong>Test Connection</strong>), then
-      click <strong>Sync from Device</strong> to auto-discover ports and ONTs.
-    {% endif %}
   </div>
-  {% if request.user.profile.is_operator %}
-  <button class="btn btn-sm" onclick="syncDevice()"
-          style="background:#3b82f6;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:600;">
-    <i class="fa-solid fa-rotate me-1"></i>Sync from Device Now
-  </button>
-  {% endif %}
+
+  <!-- Unregistered ONUs via SNMP scan -->
+  <div class="mt-3">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <h6 style="font-weight:700;margin:0;color:#b45309;"><i class="fa-solid fa-circle-question me-2" style="color:#f59e0b;"></i>Unregistered ONUs</h6>
+      <button class="btn btn-sm" id="snmpScanBtn" onclick="snmpScanUnreg()"
+              style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;font-size:0.75rem;">
+        <i class="fa-solid fa-radar me-1"></i>Scan Now
+      </button>
+    </div>
+    <div id="snmpUnregArea" style="background:#fffbeb;border:1.5px dashed #fcd34d;border-radius:12px;padding:16px;text-align:center;color:#92400e;font-size:0.82rem;">
+      Click <strong>Scan Now</strong> to detect unregistered ONUs across all PON ports.
+    </div>
+  </div>
 </div>
-{% endif %}
 
 {% endblock %}
 
@@ -383,159 +215,158 @@ const CSRF = '{{ csrf_token }}';
   setTimeout(poll, 1500); // small delay so the task is actually queued
 })();
 
-/* ── Render ONT dot grid for each PON panel ── */
-document.querySelectorAll('.ont-dot-grid').forEach(grid => {
-  const online  = parseInt(grid.dataset.online)  || 0;
-  const offline = parseInt(grid.dataset.offline) || 0;
-  const total   = parseInt(grid.dataset.total)   || 0;
-  const max     = parseInt(grid.dataset.max)     || 128;
-  const alarm   = 0; // can extend later
 
-  /* Cap display at 64 dots so the grid stays compact */
-  const cap = Math.min(max, 64);
-  const scale = cap / max;
 
-  const onlineDots  = Math.round(online  * scale);
-  const offlineDots = Math.round(offline * scale);
-  const freeDots    = cap - onlineDots - offlineDots;
-
-  let html = '';
-  for (let i = 0; i < onlineDots;  i++) html += '<span class="ont-dot dot-online"></span>';
-  for (let i = 0; i < offlineDots; i++) html += '<span class="ont-dot dot-offline"></span>';
-  for (let i = 0; i < freeDots;    i++) html += '<span class="ont-dot dot-free"></span>';
-
-  grid.innerHTML = html;
-});
-
-/* ── Test SSH Connection ── */
-function showSshAlert(html, type) {
-  const el = document.getElementById('sshAlert');
-  el.className = `alert alert-${type} alert-dismissible fade show`;
-  el.innerHTML = html + ' <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-}
-
-/* ── Sync PON Ports + ONTs from live device ── */
-function syncDevice() {
-  const btn = document.getElementById('syncDeviceBtn');
-  btn.innerHTML = '<i class="fa-solid fa-rotate fa-spin me-1"></i>Syncing...';
+/* ── SNMP Live ── */
+function loadSnmpLive() {
+  const area = document.getElementById('snmpLiveArea');
+  const btn  = document.getElementById('snmpRefreshBtn');
   btn.disabled = true;
+  area.innerHTML = `<div class="text-center py-4" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
+    <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+    <div style="font-size:0.82rem;color:#64748b;">Loading SNMP data…</div>
+  </div>`;
 
-  fetch(`/olts/{{ olt.pk }}/sync-device/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+  fetch(`/olts/{{ olt.pk }}/snmp-live/`)
     .then(r => r.json())
-    .then(d => {
-      if (d.status === 'ok') {
-        if (d.ports_found || d.onts_found) {
-          showSshAlert(
-            `<i class="fa-solid fa-circle-check me-1"></i><strong>Sync complete</strong> — ` +
-            `${d.ports_found} new PON port(s) and ${d.onts_found} new ONT(s) added. ` +
-            `<a href="" style="color:inherit;font-weight:700;">Reload page to see them.</a>`,
-            'success'
-          );
-        } else {
-          showSshAlert(
-            `<i class="fa-solid fa-circle-info me-1"></i><strong>Sync complete</strong> — ` +
-            `No new ports or ONTs found on device. All existing records are up to date.`,
-            'info'
-          );
-        }
-        updateStatusBadge('online');
-      } else {
-        showSshAlert(
-          `<i class="fa-solid fa-circle-xmark me-1"></i><strong>Sync failed</strong> — ${d.error}`,
-          'danger'
-        );
-        updateStatusBadge('offline');
+    .then(data => {
+      if (data.error) {
+        area.innerHTML = `<div class="alert alert-danger" style="border-radius:12px;">
+          <i class="fa-solid fa-circle-xmark me-1"></i><strong>SNMP Error:</strong> ${data.error}
+        </div>`;
+        return;
       }
+      if (!data.ports || data.ports.length === 0) {
+        area.innerHTML = `<div class="text-center py-4" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
+          <i class="fa-solid fa-broadcast-tower fa-2x mb-2 d-block" style="color:#cbd5e1;"></i>
+          <div style="font-size:0.9rem;font-weight:700;color:#475569;">No ONUs found via SNMP</div>
+          <div style="font-size:0.78rem;color:#94a3b8;margin-top:4px;">Check SNMP community string and that SNMP is enabled on the OLT.</div>
+        </div>`;
+        return;
+      }
+
+      // Summary bar
+      let html = `<div class="d-flex gap-3 flex-wrap mb-3">
+        <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 18px;text-align:center;min-width:80px;">
+          <div style="font-size:1.4rem;font-weight:800;line-height:1;">${data.total_ports}</div>
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-top:2px;">PON Ports</div>
+        </div>
+        <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 18px;text-align:center;min-width:80px;">
+          <div style="font-size:1.4rem;font-weight:800;line-height:1;">${data.total_onts}</div>
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-top:2px;">Total ONUs</div>
+        </div>
+        <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:10px 18px;text-align:center;min-width:80px;">
+          <div style="font-size:1.4rem;font-weight:800;line-height:1;color:#16a34a;">${data.online_onts}</div>
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:.07em;color:#16a34a;margin-top:2px;">Online</div>
+        </div>
+        <div style="background:#fff1f2;border:1.5px solid #fca5a5;border-radius:10px;padding:10px 18px;text-align:center;min-width:80px;">
+          <div style="font-size:1.4rem;font-weight:800;line-height:1;color:#dc2626;">${data.offline_onts}</div>
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:.07em;color:#dc2626;margin-top:2px;">Offline</div>
+        </div>
+      </div>`;
+
+      // PON port cards
+      html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">`;
+      data.ports.forEach(p => {
+        const online  = p.onts.filter(o => o.status === 'online').length;
+        const offline = p.onts.length - online;
+        html += `<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+          <div style="padding:12px 16px 10px;background:#fafbfd;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-size:0.9rem;font-weight:700;color:#1e293b;">
+                <i class="fa-solid fa-circle-nodes me-1" style="color:#3b82f6;font-size:0.8rem;"></i>
+                Board ${p.board} / Port ${p.port}
+              </div>
+              <div style="font-size:0.68rem;color:#94a3b8;margin-top:2px;">${p.onts.length} ONU(s) via SNMP</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <span style="background:#dcfce7;color:#15803d;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:12px;">${online} online</span>
+              ${offline > 0 ? `<span style="background:#fee2e2;color:#b91c1c;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:12px;">${offline} offline</span>` : ''}
+            </div>
+          </div>
+          <div style="padding:10px 14px;max-height:220px;overflow-y:auto;">
+            <table style="width:100%;font-size:0.75rem;border-collapse:collapse;">
+              <thead>
+                <tr style="color:#94a3b8;font-size:0.65rem;text-transform:uppercase;letter-spacing:.05em;">
+                  <th style="padding:4px 6px;font-weight:600;">ID</th>
+                  <th style="padding:4px 6px;font-weight:600;">Serial</th>
+                  <th style="padding:4px 6px;font-weight:600;">Status</th>
+                  <th style="padding:4px 6px;font-weight:600;text-align:right;">RX (dBm)</th>
+                </tr>
+              </thead>
+              <tbody>`;
+        p.onts.forEach(o => {
+          const online = o.status === 'online';
+          const rxColor = o.rx_power >= -25 ? '#15803d' : o.rx_power >= -30 ? '#92400e' : '#b91c1c';
+          html += `<tr style="border-top:1px solid #f1f5f9;">
+            <td style="padding:5px 6px;color:#64748b;font-weight:600;">${o.ont_id}</td>
+            <td style="padding:5px 6px;font-family:monospace;color:#1e293b;">${o.serial_number || '—'}</td>
+            <td style="padding:5px 6px;">
+              <span style="display:inline-flex;align-items:center;gap:4px;">
+                <span style="width:7px;height:7px;border-radius:50%;background:${online ? '#22c55e' : '#ef4444'};"></span>
+                <span style="font-weight:600;color:${online ? '#15803d' : '#b91c1c'};">${online ? 'Online' : 'Offline'}</span>
+              </span>
+            </td>
+            <td style="padding:5px 6px;text-align:right;font-family:monospace;color:${rxColor};font-weight:600;">
+              ${o.rx_power !== 0 ? o.rx_power.toFixed(2) : '—'}
+            </td>
+          </tr>`;
+        });
+        html += `</tbody></table></div></div>`;
+      });
+      html += `</div>`;
+      area.innerHTML = html;
     })
-    .catch(() => showSshAlert('Sync failed — could not reach server.', 'danger'))
-    .finally(() => {
-      btn.innerHTML = '<i class="fa-solid fa-rotate me-1"></i>Sync from Device';
-      btn.disabled = false;
-    });
+    .catch(err => {
+      area.innerHTML = `<div class="alert alert-danger" style="border-radius:12px;">
+        <i class="fa-solid fa-circle-xmark me-1"></i>Failed to load SNMP data — ${err}
+      </div>`;
+    })
+    .finally(() => { btn.disabled = false; });
 }
 
-/* ── Scan All PON Ports for Unregistered ONTs ── */
-function scanAllPorts() {
-  const btn = document.getElementById('scanAllBtn');
-  btn.innerHTML = '<i class="fa-solid fa-radar fa-spin me-1"></i>Scanning...';
+/* ── Scan unregistered ONUs (re-uses existing endpoint, renders inline) ── */
+function snmpScanUnreg() {
+  const btn  = document.getElementById('snmpScanBtn');
+  const area = document.getElementById('snmpUnregArea');
   btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-radar fa-spin me-1"></i>Scanning…';
+  area.innerHTML = `<div class="text-center py-2"><div class="spinner-border spinner-border-sm" style="color:#d97706;" role="status"></div><span style="font-size:0.82rem;color:#92400e;margin-left:8px;">Scanning all PON ports via telnet…</span></div>`;
 
   fetch(`/olts/{{ olt.pk }}/scan-all/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
     .then(r => r.json())
     .then(data => {
-      const resultsDiv = document.getElementById('scanResults');
-      const bodyDiv    = document.getElementById('scanResultsBody');
-      const summary    = document.getElementById('scanSummary');
-
       if (data.total === 0) {
-        summary.textContent = 'No unregistered ONTs detected on any PON port.';
-        bodyDiv.innerHTML   = '';
-        resultsDiv.classList.remove('d-none');
+        area.innerHTML = `<div style="text-align:center;color:#92400e;font-size:0.82rem;"><i class="fa-solid fa-circle-check me-1" style="color:#16a34a;"></i>No unregistered ONUs found on any PON port.</div>`;
         return;
       }
-
-      summary.textContent = `${data.total} device${data.total !== 1 ? 's' : ''} detected across ${data.ports.length} port${data.ports.length !== 1 ? 's' : ''}`;
-
-      let html = '';
+      let html = `<div style="font-size:0.8rem;font-weight:700;color:#92400e;margin-bottom:10px;">${data.total} device(s) detected across ${data.ports.length} port(s)</div>`;
+      html += `<div style="display:flex;flex-wrap:wrap;gap:10px;">`;
       data.ports.forEach(port => {
-        html += `
-          <div class="mb-3">
-            <div style="font-size:0.78rem;font-weight:700;color:#1e293b;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
-              <i class="fa-solid fa-circle-nodes" style="color:#3b82f6;"></i>
-              Board ${port.board} / Port ${port.port}
-              <span style="font-size:0.68rem;font-weight:400;color:#94a3b8;">${port.port_label}</span>
-              <span style="background:#fef9c3;color:#92400e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:12px;">${port.onts.length} found</span>
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:10px;">`;
-
         port.onts.forEach(ont => {
           const regUrl = `/onts/add/?pon_port=${port.port_id}&serial=${encodeURIComponent(ont.serial)}&olt={{ olt.pk }}`;
-          html += `
-              <div style="background:#fff;border:1.5px solid #e2e8f0;border-left:4px solid #f59e0b;border-radius:10px;padding:12px 16px;min-width:220px;flex:1;max-width:300px;">
-                <div style="font-size:0.78rem;font-weight:700;color:#1e293b;font-family:monospace;">${ont.serial}</div>
-                ${ont.equipment_id ? `<div style="font-size:0.68rem;color:#64748b;margin-top:2px;">${ont.equipment_id}</div>` : ''}
-                <a href="${regUrl}" class="btn btn-sm mt-2"
-                   style="background:#3b82f6;color:#fff;font-size:0.72rem;padding:4px 12px;border-radius:6px;text-decoration:none;">
-                  <i class="fa-solid fa-plus me-1"></i>Register
-                </a>
-              </div>`;
+          html += `<div style="background:#fff;border:1.5px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:12px 14px;min-width:200px;flex:1;max-width:280px;">
+            <div style="font-size:0.65rem;color:#92400e;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Board ${port.board} / Port ${port.port}</div>
+            <div style="font-size:0.8rem;font-weight:700;color:#1e293b;font-family:monospace;">${ont.serial}</div>
+            ${ont.equipment_id ? `<div style="font-size:0.68rem;color:#64748b;margin-top:2px;">${ont.equipment_id}</div>` : ''}
+            <a href="${regUrl}" class="btn btn-sm mt-2" style="background:#3b82f6;color:#fff;font-size:0.72rem;padding:4px 12px;border-radius:6px;text-decoration:none;">
+              <i class="fa-solid fa-plus me-1"></i>Register
+            </a>
+          </div>`;
         });
-
-        html += `</div></div>`;
       });
-
-      bodyDiv.innerHTML = html;
-      resultsDiv.classList.remove('d-none');
-      resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      html += `</div>`;
+      area.innerHTML = html;
     })
-    .catch(() => {
-      showSshAlert('<i class="fa-solid fa-circle-xmark me-1"></i>Scan failed — could not reach server.', 'danger');
-    })
+    .catch(() => { area.innerHTML = `<div style="color:#b91c1c;font-size:0.82rem;"><i class="fa-solid fa-circle-xmark me-1"></i>Scan failed.</div>`; })
     .finally(() => {
-      btn.innerHTML = '<i class="fa-solid fa-radar me-1"></i>Scan Unregistered ONTs';
       btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-radar me-1"></i>Scan Now';
     });
 }
 
-function testConnection(id) {
-  const btn = document.getElementById('testConnBtn');
-  btn.innerHTML = '<i class="fa-solid fa-plug fa-spin me-1"></i>Testing...';
-  btn.disabled = true;
-  fetch(`/olts/${id}/test-connection/`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
-    .then(r => r.json()).then(d => {
-      if (d.connected) {
-        showSshAlert(`<i class="fa-solid fa-circle-check me-1"></i><strong>Connected</strong> — ${d.vendor} | firmware: <code>${d.firmware || 'N/A'}</code> | latency: ${d.latency_ms} ms`, 'success');
-      } else {
-        showSshAlert(`<i class="fa-solid fa-circle-xmark me-1"></i><strong>Connection Failed</strong> — ${d.error}`, 'danger');
-      }
-      if (d.status_updated) {
-        updateStatusBadge(d.new_status);
-      }
-    }).finally(() => {
-      btn.innerHTML = '<i class="fa-solid fa-plug me-1"></i>Test Connection';
-      btn.disabled = false;
-    });
-}
+/* Auto-load SNMP on page open */
+document.addEventListener('DOMContentLoaded', loadSnmpLive);
 
 function updateStatusBadge(status) {
   const badge = document.getElementById('oltStatusBadge');

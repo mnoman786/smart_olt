@@ -536,7 +536,7 @@ def _test_telnet_raw(host: str, port: int, username: str, password: str) -> dict
 
 
 def test_connection(olt) -> dict:
-    """Test Telnet connectivity to an OLT."""
+    """Check OLT reachability via SNMP (sysDescr + sysUpTime GET)."""
     if DEMO_MODE:
         return {
             'connected': True,
@@ -546,53 +546,60 @@ def test_connection(olt) -> dict:
             'error': '',
         }
 
-    result = _test_telnet_raw(
-        host=str(olt.ip_address),
-        port=olt.telnet_port,
-        username=olt.username,
-        password=olt.password,
-    )
+    from .snmp_service import check_olt_status_snmp
+    result = check_olt_status_snmp(olt)
     return {
-        'connected': result['connected'],
-        'vendor': olt.vendor,
-        'firmware': '',
-        'latency_ms': result['latency_ms'],
-        'error': result['error'],
+        'connected':  result['connected'],
+        'vendor':     olt.vendor,
+        'firmware':   result.get('firmware', ''),
+        'latency_ms': result.get('latency_ms', 0),
+        'error':      result.get('error', ''),
     }
 
 
 def poll_olt_stats_sync(olt) -> dict:
-    if DEMO_MODE:
-        data = _demo_olt_stats(olt)
-    else:
-        data = _fetch_olt_stats(olt)
+    # SNMP determines online/offline — telnet fetches performance metrics
+    from .snmp_service import check_olt_status_snmp
+    snmp = check_olt_status_snmp(olt)
 
-    if data['connected']:
-        olt.cpu_usage = data['cpu_usage']
-        olt.memory_usage = data['memory_usage']
-        olt.temperature = data['temperature']
-        if data.get('uptime_seconds'):
-            olt.uptime = data['uptime_seconds']
-        if data.get('firmware'):
-            olt.firmware_version = data['firmware']
-        olt.status = 'online'
-        olt.save(update_fields=['cpu_usage', 'memory_usage', 'temperature',
-                                'uptime', 'firmware_version', 'status'])
-
-        from monitoring.models import OLTMetrics
-        from django.utils import timezone as _tz
-        OLTMetrics.objects.create(
-            olt=olt,
-            timestamp=_tz.now(),
-            cpu_usage=data['cpu_usage'],
-            memory_usage=data['memory_usage'],
-            temperature=data['temperature'],
-        )
-    else:
+    if not snmp['connected']:
         olt.status = 'offline'
         olt.save(update_fields=['status'])
+        return {'connected': False, 'error': snmp['error']}
 
-    return data
+    # OLT is reachable — mark online and update uptime/firmware from SNMP
+    olt.status = 'online'
+    if snmp.get('uptime_seconds'):
+        olt.uptime = snmp['uptime_seconds']
+    if snmp.get('firmware'):
+        olt.firmware_version = snmp['firmware']
+
+    # Try to fetch CPU/memory/temperature via Telnet (best-effort)
+    if DEMO_MODE:
+        metrics = _demo_olt_stats(olt)
+    else:
+        metrics = _fetch_olt_stats(olt)
+
+    if metrics.get('connected'):
+        olt.cpu_usage    = metrics['cpu_usage']
+        olt.memory_usage = metrics['memory_usage']
+        olt.temperature  = metrics['temperature']
+
+    olt.save(update_fields=['cpu_usage', 'memory_usage', 'temperature',
+                            'uptime', 'firmware_version', 'status'])
+
+    from monitoring.models import OLTMetrics
+    from django.utils import timezone as _tz
+    OLTMetrics.objects.create(
+        olt=olt,
+        timestamp=_tz.now(),
+        cpu_usage=olt.cpu_usage,
+        memory_usage=olt.memory_usage,
+        temperature=olt.temperature,
+    )
+
+    return {**snmp, **{k: metrics.get(k, 0)
+                       for k in ('cpu_usage', 'memory_usage', 'temperature')}}
 
 
 def _fetch_olt_stats(olt) -> dict:

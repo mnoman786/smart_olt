@@ -399,6 +399,125 @@
 
 {% endif %}
 
+<!-- ── Step 6: Verify with SNMP ── -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num opt">6</div>
+    <div>
+      <div class="step-title">Verify PON Ports, ONUs &amp; Unregistered ONUs via SNMP</div>
+      <div class="step-sub">Run from any Linux/Windows machine that can reach the OLT — confirms SNMP is working</div>
+    </div>
+  </div>
+  <div class="step-body">
+
+    <!-- PON ports / system check -->
+    <p style="font-size:0.8rem;font-weight:700;color:#374151;margin-bottom:6px;">
+      <i class="fa-solid fa-diagram-project me-1 text-primary"></i>System &amp; PON Port Verification
+    </p>
+    <div class="cmd-block" id="blk-v1">
+      <div class="cmd-label"><i class="fa-solid fa-network-wired"></i> SNMP — System info (MIB-II, works on both vendors)</div>
+      <button class="copy-btn" onclick="copyBlock('blk-v1')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="c"># Check OLT is reachable and get firmware/hostname</span>
+<span class="k">snmpget -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }}</span> \
+  <span class="v">1.3.6.1.2.1.1.1.0</span>  <span class="c"># sysDescr  — firmware string</span>
+  <span class="v">1.3.6.1.2.1.1.3.0</span>  <span class="c"># sysUpTime — uptime</span>
+  <span class="v">1.3.6.1.2.1.1.5.0</span>  <span class="c"># sysName   — hostname</span>
+
+<span class="c"># Walk the full interface table (shows all PON ports)</span>
+<span class="k">snmpwalk -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }} 1.3.6.1.2.1.2.2.1.2</span></pre>
+    </div>
+
+    <!-- ONUs -->
+    <p style="font-size:0.8rem;font-weight:700;color:#374151;margin:14px 0 6px;">
+      <i class="fa-solid fa-circle-nodes me-1 text-success"></i>Registered ONU List &amp; Status
+    </p>
+
+    {% if olt.vendor == 'ZTE' %}
+    <div class="cmd-block" id="blk-v2">
+      <div class="cmd-label">ZTE — ONU state &amp; serial walk</div>
+      <button class="copy-btn" onclick="copyBlock('blk-v2')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="c"># ONU operational state  (1=online  2=offline)</span>
+<span class="k">snmpwalk -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }}</span> \
+  <span class="v">1.3.6.1.4.1.3902.1015.1010.1.1.1.5</span>
+
+<span class="c"># ONU serial numbers</span>
+<span class="k">snmpwalk -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }}</span> \
+  <span class="v">1.3.6.1.4.1.3902.1015.1010.1.1.1.6</span>
+
+<span class="c"># ONU type / model</span>
+<span class="k">snmpwalk -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }}</span> \
+  <span class="v">1.3.6.1.4.1.3902.1015.1010.1.1.1.3</span>
+
+<span class="c"># ONU RX power  (divide result by 100 to get dBm)</span>
+<span class="k">snmpwalk -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }}</span> \
+  <span class="v">1.3.6.1.4.1.3902.1015.1010.2.1.1.4</span></pre>
+    </div>
+
+    <!-- Unregistered ONUs — ZTE CLI -->
+    <p style="font-size:0.8rem;font-weight:700;color:#374151;margin:14px 0 6px;">
+      <i class="fa-solid fa-circle-question me-1 text-warning"></i>Unregistered ONUs (Telnet CLI)
+    </p>
+    <div class="cmd-block" id="blk-v3">
+      <div class="cmd-label">ZTE CLI — unconfigured ONUs</div>
+      <button class="copy-btn" onclick="copyBlock('blk-v3')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="c">! List all unregistered ONUs across all PON ports</span>
+<span class="k">show gpon onu uncfg</span>
+
+<span class="c">! List unregistered ONUs on a specific port (replace 1/1)</span>
+<span class="k">show gpon onu uncfg gpon-olt_1/1</span>
+
+<span class="c">! Check ONU state on a specific port</span>
+<span class="k">show gpon onu state gpon-olt_1/1</span></pre>
+    </div>
+
+    {% else %}
+    <div class="cmd-block" id="blk-v2">
+      <div class="cmd-label">Huawei — ONU state &amp; serial walk</div>
+      <button class="copy-btn" onclick="copyBlock('blk-v2')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="c"># ONU run state  (1=online  5=offline)</span>
+<span class="k">snmpwalk -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }}</span> \
+  <span class="v">1.3.6.1.4.1.2011.6.128.1.1.2.46.1.15</span>
+
+<span class="c"># ONU serial numbers</span>
+<span class="k">snmpwalk -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }}</span> \
+  <span class="v">1.3.6.1.4.1.2011.6.128.1.1.2.46.1.2</span>
+
+<span class="c"># ONU RX power  (divide result by 100 to get dBm)</span>
+<span class="k">snmpwalk -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }}</span> \
+  <span class="v">1.3.6.1.4.1.2011.6.128.1.1.2.51.1.4</span>
+
+<span class="c"># ONU TX power</span>
+<span class="k">snmpwalk -v2c -c <span class="v">{{ olt.snmp_community }}</span> {{ olt.ip_address }}</span> \
+  <span class="v">1.3.6.1.4.1.2011.6.128.1.1.2.51.1.3</span></pre>
+    </div>
+
+    <!-- Unregistered ONUs — Huawei CLI -->
+    <p style="font-size:0.8rem;font-weight:700;color:#374151;margin:14px 0 6px;">
+      <i class="fa-solid fa-circle-question me-1 text-warning"></i>Unregistered ONUs (Telnet CLI)
+    </p>
+    <div class="cmd-block" id="blk-v3">
+      <div class="cmd-label">Huawei CLI — autofind ONUs</div>
+      <button class="copy-btn" onclick="copyBlock('blk-v3')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="c"># List all unregistered ONUs on all ports</span>
+<span class="k">display ont autofind all</span>
+
+<span class="c"># Autofind on a specific board/port (replace 0 0)</span>
+<span class="k">display ont autofind 0 0</span>
+
+<span class="c"># List all registered ONTs on board 0, port 0</span>
+<span class="k">display ont info 0 0 all</span></pre>
+    </div>
+    {% endif %}
+
+    <div class="field-hint mt-2">
+      <i class="fa-solid fa-circle-info me-1"></i>
+      SNMP walks use the <strong>read community</strong> (<code>{{ olt.snmp_community }}</code>).
+      Install <code>snmp-utils</code> on Linux or use <a href="https://www.ireasoning.com/mibbrowser.shtml" target="_blank" rel="noopener">iReasoning MIB Browser</a> on Windows.
+    </div>
+
+  </div>
+</div>
+
 <!-- Done bar -->
 <div class="done-bar">
   <div style="font-size:0.82rem; color:#64748b;">

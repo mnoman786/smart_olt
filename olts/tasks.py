@@ -95,22 +95,22 @@ def setup_new_olt(self, olt_id: int) -> dict:
     Returns a summary dict stored as the task result.
     """
     from .models import OLT
-    from .ssh_service import _test_telnet_raw, sync_olt_from_device_sync
+    from .snmp_service import check_olt_status_snmp
+    from .ssh_service import sync_olt_from_device_sync
 
     try:
         olt = OLT.objects.get(pk=olt_id)
     except OLT.DoesNotExist:
         return {'error': f'OLT {olt_id} not found', 'connected': False}
 
-    conn = _test_telnet_raw(
-        host=str(olt.ip_address),
-        port=olt.telnet_port,
-        username=olt.username,
-        password=olt.password,
-    )
+    conn = check_olt_status_snmp(olt)
 
-    new_status = 'online' if conn['connected'] else 'offline'
-    OLT.objects.filter(pk=olt_id).update(status=new_status)
+    update_fields = {'status': 'online' if conn['connected'] else 'offline'}
+    if conn.get('firmware'):
+        update_fields['firmware_version'] = conn['firmware']
+    if conn.get('uptime_seconds'):
+        update_fields['uptime'] = conn['uptime_seconds']
+    OLT.objects.filter(pk=olt_id).update(**update_fields)
 
     if not conn['connected']:
         return {'connected': False, 'error': conn['error'], 'ports_found': 0, 'onts_found': 0}

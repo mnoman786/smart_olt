@@ -324,6 +324,11 @@
     Unregistered
     <span class="tab-badge" id="discTabBadge">{{ discovered_onts|length }}</span>
   </button>
+  <button class="pon-tab" id="tabSnmp" onclick="switchTab('snmp')">
+    <i class="fa-solid fa-broadcast-tower"></i>
+    SNMP Live
+    <span class="tab-badge" id="snmpTabBadge">—</span>
+  </button>
 </div>
 
 <!-- ── Tab: Registered ONTs ── -->
@@ -558,6 +563,21 @@
 
 </div><!-- /#paneDiscovered -->
 
+<!-- ── Tab: SNMP Live ── -->
+<div class="tab-pane-pon" id="paneSnmp">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div style="font-size:0.82rem;color:#64748b;">Live ONU data polled from the OLT via SNMP — independent of the database</div>
+    <button class="btn btn-sm btn-outline-primary" onclick="loadPonSnmp()">
+      <i class="fa-solid fa-rotate me-1"></i>Refresh
+    </button>
+  </div>
+  <div id="ponSnmpArea">
+    <div class="text-center py-5" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
+      <div style="font-size:0.82rem;color:#94a3b8;">Click the tab to load SNMP data</div>
+    </div>
+  </div>
+</div><!-- /#paneSnmp -->
+
 <!-- ── Back ── -->
 <div class="mt-4 pt-2">
   <a href="{% url 'olt_detail' olt.pk %}" class="btn btn-outline-secondary">
@@ -581,10 +601,103 @@ function switchTab(tab) {
   if (tab === 'registered') {
     document.getElementById('tabRegistered').classList.add('active');
     document.getElementById('paneRegistered').classList.add('active');
-  } else {
+  } else if (tab === 'discovered') {
     document.getElementById('tabDiscovered').classList.add('active');
     document.getElementById('paneDiscovered').classList.add('active');
+  } else if (tab === 'snmp') {
+    document.getElementById('tabSnmp').classList.add('active');
+    document.getElementById('paneSnmp').classList.add('active');
+    loadPonSnmp();
   }
+}
+
+/* ── SNMP Live for this PON ── */
+let snmpLoaded = false;
+function loadPonSnmp() {
+  const area = document.getElementById('ponSnmpArea');
+  area.innerHTML = `<div class="text-center py-5" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
+    <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+    <div style="font-size:0.82rem;color:#64748b;">Polling SNMP…</div>
+  </div>`;
+
+  fetch(`/olts/{{ olt.pk }}/pon/{{ pon_port.pk }}/snmp-live/`)
+    .then(r => r.json())
+    .then(data => {
+      const badge = document.getElementById('snmpTabBadge');
+      if (data.error) {
+        area.innerHTML = `<div class="alert alert-danger" style="border-radius:12px;">
+          <i class="fa-solid fa-circle-xmark me-1"></i><strong>SNMP Error:</strong> ${data.error}
+        </div>`;
+        badge.textContent = '!';
+        return;
+      }
+      badge.textContent = data.total;
+      if (data.total === 0) {
+        area.innerHTML = `<div class="text-center py-5" style="background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0;">
+          <i class="fa-solid fa-circle-nodes fa-2x mb-2 d-block" style="color:#cbd5e1;"></i>
+          <div style="font-size:0.9rem;font-weight:700;color:#475569;">No ONUs on this PON via SNMP</div>
+          <div style="font-size:0.78rem;color:#94a3b8;margin-top:4px;">Check SNMP community and PON port index.</div>
+        </div>`;
+        return;
+      }
+
+      let html = `
+        <div class="d-flex gap-3 flex-wrap mb-3">
+          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 18px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:800;line-height:1;">${data.total}</div>
+            <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-top:2px;">Total ONUs</div>
+          </div>
+          <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:10px 18px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:800;line-height:1;color:#16a34a;">${data.online}</div>
+            <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:.07em;color:#16a34a;margin-top:2px;">Online</div>
+          </div>
+          <div style="background:#fff1f2;border:1.5px solid #fca5a5;border-radius:10px;padding:10px 18px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:800;line-height:1;color:#dc2626;">${data.offline}</div>
+            <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:.07em;color:#dc2626;margin-top:2px;">Offline</div>
+          </div>
+        </div>
+        <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+            <thead style="background:#fafbfd;border-bottom:1px solid #f1f5f9;">
+              <tr style="color:#64748b;font-size:0.7rem;text-transform:uppercase;letter-spacing:.05em;">
+                <th style="padding:10px 14px;font-weight:600;">ONU ID</th>
+                <th style="padding:10px 14px;font-weight:600;">Serial Number</th>
+                <th style="padding:10px 14px;font-weight:600;">Status</th>
+                <th style="padding:10px 14px;font-weight:600;text-align:right;">RX Power (dBm)</th>
+                <th style="padding:10px 14px;font-weight:600;text-align:right;">TX Power (dBm)</th>
+                <th style="padding:10px 14px;font-weight:600;text-align:right;">OLT RX (dBm)</th>
+              </tr>
+            </thead>
+            <tbody>`;
+
+      data.onts.forEach((o, i) => {
+        const online = o.status === 'online';
+        const rxColor = o.rx_power >= -25 ? '#15803d' : o.rx_power >= -30 ? '#92400e' : '#b91c1c';
+        const bg = i % 2 === 0 ? '#fff' : '#fafbfd';
+        html += `<tr style="border-top:1px solid #f1f5f9;background:${bg};">
+          <td style="padding:10px 14px;color:#64748b;font-weight:600;">${o.ont_id}</td>
+          <td style="padding:10px 14px;font-family:monospace;font-weight:600;color:#1e293b;">${o.serial_number || '—'}</td>
+          <td style="padding:10px 14px;">
+            <span style="display:inline-flex;align-items:center;gap:5px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${online ? '#22c55e' : '#ef4444'};"></span>
+              <span style="font-weight:600;color:${online ? '#15803d' : '#b91c1c'};">${online ? 'Online' : 'Offline'}</span>
+            </span>
+          </td>
+          <td style="padding:10px 14px;text-align:right;font-family:monospace;font-weight:600;color:${rxColor};">${o.rx_power !== 0 ? o.rx_power.toFixed(2) : '—'}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:monospace;color:#64748b;">${o.tx_power !== 0 ? o.tx_power.toFixed(2) : '—'}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:monospace;color:#64748b;">${o.olt_rx_power !== 0 ? o.olt_rx_power.toFixed(2) : '—'}</td>
+        </tr>`;
+      });
+
+      html += `</tbody></table></div>`;
+      area.innerHTML = html;
+      snmpLoaded = true;
+    })
+    .catch(err => {
+      area.innerHTML = `<div class="alert alert-danger" style="border-radius:12px;">
+        <i class="fa-solid fa-circle-xmark me-1"></i>Request failed — ${err}
+      </div>`;
+    });
 }
 
 /* ── Filter pills (registered tab) ── */

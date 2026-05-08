@@ -104,30 +104,91 @@ def olt_create(request):
                 if task_id:
                     return redirect(f'/olts/{olt.pk}/?setup_task={task_id}')
             else:
-                from .ssh_service import _test_telnet_raw, sync_olt_from_device_sync
-                result = _test_telnet_raw(
-                    host=str(olt.ip_address), port=olt.telnet_port,
-                    username=olt.username, password=olt.password,
-                )
+                from .snmp_service import check_olt_status_snmp
+                from .ssh_service import sync_olt_from_device_sync
+                result = check_olt_status_snmp(olt)
                 olt.status = 'online' if result['connected'] else 'offline'
-                olt.save(update_fields=['status'])
+                if result.get('firmware'):
+                    olt.firmware_version = result['firmware']
+                if result.get('uptime_seconds'):
+                    olt.uptime = result['uptime_seconds']
+                olt.save(update_fields=['status', 'firmware_version', 'uptime'])
                 if result['connected']:
                     sync = sync_olt_from_device_sync(olt)
                     messages.success(request,
-                        f'OLT "{olt.name}" connected. '
+                        f'OLT "{olt.name}" reachable via SNMP. '
                         f'Found {sync["ports_found"]} port(s) and {sync["onts_found"]} ONT(s).'
                         if sync['ports_found'] or sync['onts_found'] else
-                        f'OLT "{olt.name}" connected. No ONTs found yet — use Sync from Device.'
+                        f'OLT "{olt.name}" reachable via SNMP. No ONTs found yet — use Sync from Device.'
                     )
                 else:
                     messages.warning(request,
-                        f'OLT "{olt.name}" saved but connection failed: {result["error"]}'
+                        f'OLT "{olt.name}" saved but SNMP check failed: {result["error"]}'
                     )
 
             return redirect('olt_setup_commands', pk=olt.pk)
     else:
         form = OLTForm()
     return render(request, 'olts/form.html', {'form': form, 'action': 'Add OLT'})
+
+
+@login_required
+def olt_snmp_live(request, pk):
+    """Return live ONU list from SNMP, grouped by PON port."""
+    olt = get_object_or_404(OLT, pk=pk, is_deleted=False)
+    from .snmp_service import get_onu_list_snmp
+    try:
+        onts = get_onu_list_snmp(olt)
+    except Exception as exc:
+        return JsonResponse({'error': str(exc), 'ports': []})
+
+    port_map = {}
+    for o in onts:
+        key = (o['board'], o['port'])
+        if key not in port_map:
+            port_map[key] = {'board': o['board'], 'port': o['port'], 'onts': []}
+        port_map[key]['onts'].append({
+            'ont_id':        o['ont_id'],
+            'status':        o['status'],
+            'serial_number': o['serial_number'],
+            'rx_power':      o['rx_power'],
+            'tx_power':      o['tx_power'],
+            'olt_rx_power':  o.get('olt_rx_power', 0),
+        })
+
+    ports = sorted(port_map.values(), key=lambda p: (p['board'], p['port']))
+    return JsonResponse({
+        'total_ports':  len(ports),
+        'total_onts':   len(onts),
+        'online_onts':  sum(1 for o in onts if o['status'] == 'online'),
+        'offline_onts': sum(1 for o in onts if o['status'] != 'online'),
+        'ports': ports,
+        'error': '',
+    })
+
+
+@login_required
+def pon_snmp_live(request, olt_pk, pon_pk):
+    """Return live ONU list from SNMP for a single PON port."""
+    olt      = get_object_or_404(OLT, pk=olt_pk, is_deleted=False)
+    pon_port = get_object_or_404(PONPort, pk=pon_pk, olt=olt)
+    from .snmp_service import get_onu_list_snmp
+    try:
+        all_onts = get_onu_list_snmp(olt)
+    except Exception as exc:
+        return JsonResponse({'error': str(exc), 'onts': []})
+
+    onts = [o for o in all_onts
+            if o['board'] == pon_port.board and o['port'] == pon_port.port]
+    return JsonResponse({
+        'board':   pon_port.board,
+        'port':    pon_port.port,
+        'total':   len(onts),
+        'online':  sum(1 for o in onts if o['status'] == 'online'),
+        'offline': sum(1 for o in onts if o['status'] != 'online'),
+        'onts':    onts,
+        'error':   '',
+    })
 
 
 @login_required

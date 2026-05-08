@@ -116,6 +116,25 @@ def _parse_index(suffix: str) -> tuple[int, int, int, int] | None:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def check_olt_status_snmp(olt) -> dict:
+    """
+    Lightweight SNMP reachability check — determines online/offline status.
+    Fetches sysDescr + sysUpTime via a single SNMP GET.
+    Returns {connected, firmware, uptime_seconds, latency_ms, error}.
+    """
+    import time
+    t0 = time.monotonic()
+    result = get_olt_stats_snmp(olt)
+    latency_ms = int((time.monotonic() - t0) * 1000)
+    return {
+        'connected':      result['connected'],
+        'firmware':       result.get('firmware', ''),
+        'uptime_seconds': result.get('uptime_seconds', 0),
+        'latency_ms':     latency_ms,
+        'error':          result.get('error', ''),
+    }
+
+
 def get_olt_stats_snmp(olt) -> dict:
     """
     Fetch system description and uptime via standard MIB-II OIDs.
