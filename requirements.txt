@@ -8,7 +8,7 @@ django-extensions==3.2.3
 
 # SSH / SNMP connectivity
 netmiko==4.3.0
-pysnmp==4.4.12
+pysnmp-lextudio>=5.0.21
 
 # Task queue (background polling for 1000+ OLTs)
 celery[redis]==5.3.6

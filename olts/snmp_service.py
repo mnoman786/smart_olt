@@ -4,7 +4,7 @@ SNMP service for OLT monitoring.
 Used for all read/polling operations (ONU list, status, optical power,
 CPU, memory). Telnet is kept only for write operations (reboot, provision).
 
-Install:  pip install pysnmp
+Install:  pip install pysnmp-lextudio
 """
 from __future__ import annotations
 import logging
