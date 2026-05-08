@@ -5,6 +5,7 @@ urlpatterns = [
     path('', views.olt_list, name='olt_list'),
     path('add/', views.olt_create, name='olt_create'),
     path('<int:pk>/', views.olt_detail, name='olt_detail'),
+    path('<int:pk>/setup-commands/', views.olt_setup_commands, name='olt_setup_commands'),
     path('<int:pk>/edit/', views.olt_edit, name='olt_edit'),
     path('<int:pk>/delete/', views.olt_delete, name='olt_delete'),
     path('<int:pk>/refresh/', views.olt_refresh, name='olt_refresh'),

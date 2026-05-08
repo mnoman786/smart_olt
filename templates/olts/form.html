@@ -213,21 +213,23 @@
     <!-- Credentials row -->
     <div class="row g-3 mb-3">
       <div class="col-md-6">
-        <label class="form-label"><i class="fa-solid fa-user me-1 text-muted"></i>Username</label>
+        <label class="form-label"><i class="fa-solid fa-user me-1 text-muted"></i>OLT Telnet Username</label>
         <div class="input-icon-wrap">
           <i class="input-icon fa-solid fa-user"></i>
           {{ form.username }}
         </div>
+        <div class="field-hint">Username SmartOLT will use to connect via telnet</div>
       </div>
       <div class="col-md-6">
-        <label class="form-label"><i class="fa-solid fa-key me-1 text-muted"></i>Password</label>
+        <label class="form-label"><i class="fa-solid fa-key me-1 text-muted"></i>OLT Telnet Password</label>
         <div class="input-icon-wrap">
           <i class="input-icon fa-solid fa-lock"></i>
           <input type="password" name="password" id="id_password"
                  value="{{ form.password.value|default:'' }}"
-                 class="form-control" placeholder="Enter password">
+                 class="form-control" placeholder="Use a safe, complex password">
           <i class="input-icon-right fa-solid fa-eye" id="pwToggle" onclick="togglePw()"></i>
         </div>
+        <div class="field-hint">Use a safe, complex password</div>
       </div>
     </div>
 
@@ -248,6 +250,64 @@
   </div>
 </div>
 
+<!-- ── 3. SNMP & Features ── -->
+<div class="form-section">
+  <div class="form-section-header">
+    <div class="form-section-icon" style="background:#f0fdf4;">
+      <i class="fa-solid fa-broadcast-tower" style="color:#16a34a;"></i>
+    </div>
+    <div>
+      <div class="form-section-title">SNMP &amp; Features</div>
+      <div class="form-section-sub">SNMP communities, UDP port, IPTV and PON type</div>
+    </div>
+  </div>
+  <div class="form-section-body">
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-5">
+        <label class="form-label">SNMP Read-Only Community</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-eye"></i>
+          {{ form.snmp_community }}
+        </div>
+        <div class="field-hint">Will be automatically created on the OLT</div>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label">SNMP Read-Write Community</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-pen"></i>
+          {{ form.snmp_write_community }}
+        </div>
+        <div class="field-hint">Will be automatically created on the OLT</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">SNMP UDP Port</label>
+        <div class="input-icon-wrap">
+          <i class="input-icon fa-solid fa-hashtag"></i>
+          {{ form.snmp_port }}
+        </div>
+        <div class="field-hint">Default: 161</div>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid #f1f5f9; margin: 4px 0 18px;"></div>
+
+    <!-- PON type -->
+    <div class="mb-3">
+      <label class="form-label">Supported PON Types <span class="text-danger">*</span></label>
+      <div class="d-flex gap-3 flex-wrap mt-1">
+        {% for radio in form.pon_type %}
+        <div class="form-check form-check-inline">
+          {{ radio.tag }}
+          <label class="form-check-label" for="{{ radio.id_for_label }}" style="font-size:0.85rem;">{{ radio.choice_label }}</label>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- ── 4. Advanced ── -->
 <div class="form-section">
   <div class="form-section-header" style="cursor:pointer;" onclick="toggleAdvanced()">
@@ -256,19 +316,12 @@
     </div>
     <div style="flex:1;">
       <div class="form-section-title">Advanced &amp; Optional</div>
-      <div class="form-section-sub">SNMP, firmware version, location coordinates</div>
+      <div class="form-section-sub">Firmware version, location coordinates, notes</div>
     </div>
     <i class="fa-solid fa-chevron-down text-muted" id="advChevron" style="transition:transform 0.2s;"></i>
   </div>
   <div id="advancedBody" class="form-section-body" style="display:none;">
     <div class="row g-3">
-      <div class="col-md-6">
-        <label class="form-label">SNMP Community</label>
-        <div class="input-icon-wrap">
-          <i class="input-icon fa-solid fa-broadcast-tower"></i>
-          {{ form.snmp_community }}
-        </div>
-      </div>
       <div class="col-md-6">
         <label class="form-label">Firmware Version</label>
         <div class="input-icon-wrap">
@@ -464,8 +517,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (vendor === 'HUAWEI') { document.getElementById('huaweiModels').style.display = 'flex'; document.getElementById('vendor-huawei').classList.add('selected-huawei'); }
 
   // Auto-open advanced if any optional field has a value (edit mode)
-  const adv = ['{{ form.snmp_community.value }}','{{ form.firmware_version.value }}','{{ form.location.value }}'];
-  if (adv.some(v => v && v !== 'public' && v !== '')) toggleAdvanced();
+  const adv = ['{{ form.firmware_version.value }}','{{ form.location.value }}'];
+  if (adv.some(v => v && v !== '')) toggleAdvanced();
 
   // Highlight current model chip
   const cur = document.getElementById('id_model').value;

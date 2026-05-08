@@ -124,10 +124,16 @@ def olt_create(request):
                         f'OLT "{olt.name}" saved but connection failed: {result["error"]}'
                     )
 
-            return redirect('olt_detail', pk=olt.pk)
+            return redirect('olt_setup_commands', pk=olt.pk)
     else:
         form = OLTForm()
     return render(request, 'olts/form.html', {'form': form, 'action': 'Add OLT'})
+
+
+@login_required
+def olt_setup_commands(request, pk):
+    olt = get_object_or_404(OLT, pk=pk, is_deleted=False)
+    return render(request, 'olts/setup_commands.html', {'olt': olt})
 
 
 @login_required

@@ -28,7 +28,16 @@ class OLT(models.Model):
     longitude = models.FloatField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='unknown')
     description = models.TextField(blank=True)
+    PON_TYPE_CHOICES = [
+        ('GPON', 'GPON'),
+        ('EPON', 'EPON'),
+        ('GPON+EPON', 'GPON+EPON'),
+    ]
+
     snmp_community = models.CharField(max_length=50, default='public')
+    snmp_write_community = models.CharField(max_length=50, default='private')
+    snmp_port = models.IntegerField(default=161)
+    pon_type = models.CharField(max_length=20, choices=PON_TYPE_CHOICES, default='GPON')
     firmware_version = models.CharField(max_length=50, blank=True)
     uptime = models.BigIntegerField(default=0)
     cpu_usage = models.FloatField(default=0)

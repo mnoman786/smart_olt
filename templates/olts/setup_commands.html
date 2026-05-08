@@ -1,0 +1,450 @@
+{% extends 'base.html' %}
+{% block title %}Setup Commands — {{ olt.name }}{% endblock %}
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'olt_list' %}">OLTs</a></li>
+<li class="breadcrumb-item"><a href="{% url 'olt_detail' olt.pk %}">{{ olt.name }}</a></li>
+<li class="breadcrumb-item active">Setup Commands</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.setup-page { max-width: 880px; margin: 0 auto; }
+
+.step-card {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+.step-header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 20px;
+  background: #fafbfd;
+  border-bottom: 1px solid #f1f5f9;
+}
+.step-num {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #3b82f6; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; font-weight: 700; flex-shrink: 0;
+}
+.step-num.opt { background: #94a3b8; }
+.step-title { font-size: 0.92rem; font-weight: 700; color: #1e293b; margin: 0; }
+.step-sub   { font-size: 0.73rem; color: #94a3b8; margin: 0; }
+.step-body  { padding: 18px 20px; }
+
+/* Code block */
+.cmd-block {
+  background: #0f172a;
+  border-radius: 10px;
+  padding: 14px 16px 14px 16px;
+  position: relative;
+  margin-bottom: 10px;
+}
+.cmd-block pre {
+  margin: 0;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.82rem;
+  color: #e2e8f0;
+  white-space: pre;
+  overflow-x: auto;
+  line-height: 1.75;
+}
+.cmd-label {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em;
+  color: #64748b; text-transform: uppercase; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.copy-btn {
+  position: absolute; top: 10px; right: 10px;
+  background: #1e293b; border: 1px solid #334155;
+  color: #94a3b8; border-radius: 6px;
+  padding: 4px 11px; font-size: 0.72rem; cursor: pointer;
+  transition: all 0.15s; line-height: 1.5;
+}
+.copy-btn:hover { background: #334155; color: #e2e8f0; }
+.copy-btn.copied { background: #14532d; border-color: #16a34a; color: #bbf7d0; }
+
+/* Syntax */
+.c  { color: #475569; }   /* comment */
+.v  { color: #86efac; }   /* value / variable */
+.k  { color: #93c5fd; }   /* keyword / command */
+.kw { color: #fde68a; }   /* secondary keyword */
+
+/* Summary table */
+.info-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.info-table td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; }
+.info-table td:first-child { color: #64748b; font-weight: 600; width: 200px; }
+.info-table td:last-child  { font-family: monospace; color: #1e293b; }
+.info-table tr:last-child td { border-bottom: none; }
+
+.badge-vendor { display:inline-block; padding:2px 10px; border-radius:6px; font-size:0.72rem; font-weight:700; }
+.badge-zte    { background:#fff1f2; color:#dc2626; }
+.badge-huawei { background:#eff6ff; color:#2563eb; }
+
+.done-bar {
+  background: #fff; border: 1.5px solid #e2e8f0;
+  border-radius: 14px; padding: 18px 22px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.field-hint { font-size: 0.72rem; color: #94a3b8; margin-top: 5px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h4 class="page-title">
+      <i class="fa-solid fa-terminal me-2 text-primary"></i>OLT Setup Commands
+    </h4>
+    <p class="page-subtitle">
+      Run these commands on <strong>{{ olt.name }}</strong> to configure it for SmartOLT
+    </p>
+  </div>
+</div>
+
+<div class="setup-page">
+
+<!-- Banner -->
+<div class="alert alert-success d-flex gap-2 align-items-center mb-4" style="border-radius:12px;">
+  <i class="fa-solid fa-circle-check fa-lg"></i>
+  <div>
+    <strong>OLT "{{ olt.name }}" saved.</strong>
+    Apply the commands below on the device, then click <em>Go to OLT</em> to test the connection.
+  </div>
+</div>
+
+<!-- Device summary -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num"><i class="fa-solid fa-server" style="font-size:0.68rem;"></i></div>
+    <div style="flex:1;">
+      <div class="step-title">Device Summary</div>
+      <div class="step-sub">Credentials and SNMP values used in the commands below</div>
+    </div>
+    <span class="badge-vendor {% if olt.vendor == 'ZTE' %}badge-zte{% else %}badge-huawei{% endif %}">{{ olt.vendor }} — {{ olt.model }}</span>
+  </div>
+  <div class="step-body" style="padding:0;">
+    <table class="info-table">
+      <tr><td>OLT IP Address</td><td>{{ olt.ip_address }}</td></tr>
+      <tr><td>Telnet Port</td><td>{{ olt.telnet_port }}</td></tr>
+      <tr><td>OLT Telnet Username</td><td>{{ olt.username }}</td></tr>
+      <tr><td>OLT Telnet Password</td><td>{{ olt.password }}</td></tr>
+      <tr><td>SmartOLT Device User</td><td>autoolt <small class="text-muted">(hardcoded — created in Step 2/3)</small></td></tr>
+      <tr><td>SmartOLT Device Password</td><td>autoolt123</td></tr>
+      <tr><td>SNMP Read Community</td><td>{{ olt.snmp_community }}</td></tr>
+      <tr><td>SNMP Write Community</td><td>{{ olt.snmp_write_community }}</td></tr>
+      <tr><td>SNMP UDP Port</td><td>{{ olt.snmp_port }}</td></tr>
+      <tr><td>PON Type</td><td>{{ olt.pon_type }}</td></tr>
+    </table>
+  </div>
+</div>
+
+{% if olt.vendor == 'ZTE' %}
+{# ═══════════════════════  ZTE  ═══════════════════════ #}
+
+<!-- Step 1 -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num">1</div>
+    <div>
+      <div class="step-title">Connect to the OLT via Telnet</div>
+      <div class="step-sub">From a PC on the same network as the OLT</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-z1">
+      <div class="cmd-label"><i class="fa-solid fa-terminal"></i> Terminal</div>
+      <button class="copy-btn" onclick="copyBlock('blk-z1')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="k">telnet</span> <span class="v">{{ olt.ip_address }}</span>{% if olt.telnet_port != 23 %} <span class="v">{{ olt.telnet_port }}</span>{% endif %}</pre>
+    </div>
+    <div class="field-hint">Log in with your <strong>current OLT admin</strong> credentials first — you will create the dedicated SmartOLT user in Step 2.</div>
+  </div>
+</div>
+
+<!-- Step 2 -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num">2</div>
+    <div>
+      <div class="step-title">Create Dedicated SmartOLT User</div>
+      <div class="step-sub">Separate account used only by SmartOLT — never share with human operators</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-z2">
+      <div class="cmd-label"><i class="fa-brands fa-zte" style="font-style:normal;">ZTE</i> CLI</div>
+      <button class="copy-btn" onclick="copyBlock('blk-z2')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="k">conf t</span>
+<span class="k">username</span> <span class="v">autoolt</span> <span class="kw">password</span> <span class="v">autoolt123</span> <span class="kw">max-sessions</span> 16 <span class="kw">privilege</span> 15</pre>
+    </div>
+    <div class="field-hint"><i class="fa-solid fa-circle-info me-1"></i><code>privilege 15</code> is required — SmartOLT needs full read access to poll ONU states and port statistics.</div>
+  </div>
+</div>
+
+<!-- Step 3 -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num">3</div>
+    <div>
+      <div class="step-title">Enable Telnet (Disable SSH-only Mode)</div>
+      <div class="step-sub">SmartOLT connects via Telnet — ensure it is not blocked</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-z3">
+      <div class="cmd-label"><i style="font-style:normal;">ZTE</i> CLI</div>
+      <button class="copy-btn" onclick="copyBlock('blk-z3')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="k">conf t</span>
+<span class="c">! Allow Telnet connections (disable SSH-only restriction)</span>
+<span class="k">no ssh server only</span>
+<span class="c">! Set telnet on line vty</span>
+<span class="k">line vty 0 15</span>
+<span class="k"> login local</span>
+<span class="k"> privilege level 15</span>
+<span class="c">! Save</span>
+<span class="k">end</span>
+<span class="k">write</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Step 4 -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num">4</div>
+    <div>
+      <div class="step-title">Configure SNMP Communities</div>
+      <div class="step-sub">Read and write community strings for monitoring and polling</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-z4">
+      <div class="cmd-label"><i style="font-style:normal;">ZTE</i> CLI</div>
+      <button class="copy-btn" onclick="copyBlock('blk-z4')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="k">conf t</span>
+<span class="c">! SNMP read-only community</span>
+<span class="k">snmp-server community</span> <span class="v">{{ olt.snmp_community }}</span> <span class="kw">ro</span>
+<span class="c">! SNMP read-write community</span>
+<span class="k">snmp-server community</span> <span class="v">{{ olt.snmp_write_community }}</span> <span class="kw">rw</span>{% if olt.snmp_port != 161 %}
+
+<span class="c">! Non-default SNMP UDP port</span>
+<span class="k">snmp-server udp-port</span> <span class="v">{{ olt.snmp_port }}</span>{% endif %}
+
+<span class="k">snmp-server enable traps</span>
+<span class="c">! Optional: MIB compatibility for v2c</span>
+<span class="k">mib-compatibility iftable v2</span>
+<span class="k">end</span>
+<span class="k">write</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Step 5 optional -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num opt">5</div>
+    <div>
+      <div class="step-title">Optional: Auto-Save &amp; NTP</div>
+      <div class="step-sub">Recommended for production OLTs</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-z5">
+      <div class="cmd-label"><i style="font-style:normal;">ZTE</i> CLI</div>
+      <button class="copy-btn" onclick="copyBlock('blk-z5')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="k">conf t</span>
+<span class="c">! Auto-save configuration every day at 18:00</span>
+<span class="k">auto-write enable</span>
+<span class="k">auto-write 18:00:00 everyday</span>
+<span class="c">! NTP servers</span>
+<span class="k">ntp server 20.101.57.9 priority 1 version 4</span>
+<span class="k">ntp server 216.239.35.4 priority 2 version 4</span>
+<span class="k">ntp enable</span>
+<span class="k">end</span>
+<span class="k">write</span></pre>
+    </div>
+  </div>
+</div>
+
+{% else %}
+{# ═══════════════════════  HUAWEI  ═══════════════════════ #}
+
+<!-- Step 1 -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num">1</div>
+    <div>
+      <div class="step-title">Connect to the OLT via Telnet</div>
+      <div class="step-sub">From a PC on the same network as the OLT</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-h1">
+      <div class="cmd-label"><i class="fa-solid fa-terminal"></i> Terminal</div>
+      <button class="copy-btn" onclick="copyBlock('blk-h1')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="k">telnet</span> <span class="v">{{ olt.ip_address }}</span></pre>
+    </div>
+    <div class="field-hint">Log in with your <strong>current OLT admin</strong> credentials (e.g. root / admin123) — you will create the dedicated SmartOLT user in Step 3.</div>
+  </div>
+</div>
+
+<!-- Step 2 -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num">2</div>
+    <div>
+      <div class="step-title">Enable Telnet &amp; SNMP Services</div>
+      <div class="step-sub">Open management services and disable firewall restrictions</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-h2">
+      <div class="cmd-label">Huawei CLI</div>
+      <button class="copy-btn" onclick="copyBlock('blk-h2')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="c"># Enable Telnet and SNMP services</span>
+<span class="k">config</span>
+<span class="k">sysman service telnet enable</span>
+<span class="k">sysman service snmp enable</span>
+<span class="c"># Disable firewall blocking</span>
+<span class="k">sysman firewall telnet disable</span>
+<span class="k">sysman firewall snmp disable</span>
+<span class="c"># Allow connections from any interface</span>
+<span class="k">sysman server source telnet any-interface</span>
+<span class="k">sysman server source snmp any-interface</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Step 3 -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num">3</div>
+    <div>
+      <div class="step-title">Create Dedicated SmartOLT User</div>
+      <div class="step-sub">Separate account used only by SmartOLT — never share with human operators</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-h3">
+      <div class="cmd-label">Huawei CLI</div>
+      <button class="copy-btn" onclick="copyBlock('blk-h3')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="c"># Set the SmartOLT username and password interactively</span>
+<span class="k">terminal user name</span>
+<span class="c"># (type: <span class="v">autoolt</span>  then press Enter)</span>
+<span class="k">terminal user password</span>
+<span class="c"># (type: <span class="v">autoolt123</span>  then press Enter)</span></pre>
+    </div>
+    <div class="field-hint"><i class="fa-solid fa-circle-info me-1"></i>On some Huawei models you can also use <code>aaa / local-user autoolt password cipher autoolt123</code> — check your firmware version.</div>
+  </div>
+</div>
+
+<!-- Step 4 -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num">4</div>
+    <div>
+      <div class="step-title">Configure SNMP Communities</div>
+      <div class="step-sub">Read and write community strings for monitoring and polling</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-h4">
+      <div class="cmd-label">Huawei CLI</div>
+      <button class="copy-btn" onclick="copyBlock('blk-h4')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="k">system-view</span>
+<span class="c"># Enable SNMP agent</span>
+<span class="k">snmp-agent</span>
+<span class="k">snmp-agent sys-info version v2c</span>
+<span class="c"># Read-only community</span>
+<span class="k">snmp-agent community read</span> <span class="v">{{ olt.snmp_community }}</span>
+<span class="c"># Read-write community</span>
+<span class="k">snmp-agent community write</span> <span class="v">{{ olt.snmp_write_community }}</span>{% if olt.snmp_port != 161 %}
+
+<span class="c"># Non-default SNMP UDP port</span>
+<span class="k">snmp-agent udp-port</span> <span class="v">{{ olt.snmp_port }}</span>{% endif %}
+
+<span class="k">quit</span>
+<span class="k">save</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Step 5 optional -->
+<div class="step-card">
+  <div class="step-header">
+    <div class="step-num opt">5</div>
+    <div>
+      <div class="step-title">Optional: Auto-Save &amp; NTP</div>
+      <div class="step-sub">Recommended for production OLTs</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="cmd-block" id="blk-h5">
+      <div class="cmd-label">Huawei CLI</div>
+      <button class="copy-btn" onclick="copyBlock('blk-h5')"><i class="fa-solid fa-copy me-1"></i>Copy</button>
+      <pre><span class="k">config</span>
+<span class="c"># Auto-save every 1442 minutes</span>
+<span class="k">autosave interval 1442</span>
+<span class="k">autosave type all</span>
+<span class="k">autosave interval configuration 480</span>
+<span class="k">autosave interval on</span>
+<span class="c"># NTP servers</span>
+<span class="k">ntp-service unicast-server 20.101.57.9</span>
+<span class="k">ntp-service unicast-server 216.239.35.4</span></pre>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+
+<!-- Done bar -->
+<div class="done-bar">
+  <div style="font-size:0.82rem; color:#64748b;">
+    <i class="fa-solid fa-circle-check text-success me-1"></i>
+    After applying all commands, use <strong>Test Connection</strong> on the OLT detail page to verify SmartOLT can reach the device.
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'olt_setup_commands' olt.pk %}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-rotate-left me-1"></i>View Again
+    </a>
+    <a href="{% url 'olt_detail' olt.pk %}" class="btn btn-primary btn-sm px-4">
+      <i class="fa-solid fa-arrow-right me-1"></i>Go to OLT
+    </a>
+  </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyBlock(blockId) {
+  const block = document.getElementById(blockId);
+  const pre   = block.querySelector('pre');
+  const btn   = block.querySelector('.copy-btn');
+  const text  = pre.innerText;
+
+  const finish = () => {
+    btn.classList.add('copied');
+    btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Copied!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = '<i class="fa-solid fa-copy me-1"></i>Copy';
+    }, 2000);
+  };
+
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(finish);
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    finish();
+  }
+}
+</script>
+{% endblock %}
