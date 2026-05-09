@@ -364,16 +364,7 @@ def olt_test_connection_raw(request):
     if not ip or not username or not password:
         return JsonResponse({'connected': False, 'error': 'IP, username and password are required.'})
 
-    from .ssh_service import DEMO_MODE, _test_telnet_raw
-    if DEMO_MODE:
-        return JsonResponse({
-            'connected': True,
-            'vendor': vendor,
-            'firmware': 'V2.0.1P2 (demo)',
-            'latency_ms': 12,
-            'error': '',
-        })
-
+    from .ssh_service import _test_telnet_raw
     result = _test_telnet_raw(host=ip, port=port, username=username, password=password)
     return JsonResponse({
         'connected': result['connected'],

@@ -12,7 +12,6 @@ A full-featured Django web application for ISP/NOC teams to manage, monitor, and
 - **Reports & Export** — HTML reports and CSV export for ONT status and events
 - **Multi-user** — OLT ownership, per-user quota, superuser admin panel
 - **Background Polling** — Celery + Redis fan-out polling for 1 000+ OLTs at 5-minute intervals
-- **Demo Mode** — Simulate device responses without real hardware
 
 ## Tech Stack
 
@@ -57,9 +56,6 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 # Redis (required for Celery background polling)
 REDIS_URL=redis://localhost:6379/0
 
-# Demo mode — simulates OLT responses without real hardware
-OLT_DEMO_MODE=True
-
 # Disable Celery for simple single-process testing
 USE_CELERY=False
 
@@ -80,11 +76,10 @@ python manage.py migrate
 python manage.py collectstatic --noinput
 ```
 
-### 4. Load demo data (optional)
+### 4. Create admin user
 
 ```bash
-python manage.py seed_demo
-# Login: admin / admin123
+python manage.py createsuperuser
 ```
 
 ### 5. Run development server
@@ -120,8 +115,7 @@ chmod +x setup.sh && sudo ./setup.sh
 The script:
 1. Creates a Python virtualenv and installs dependencies
 2. Runs migrations and collects static files
-3. Seeds demo data
-4. Registers a `smartolt.service` systemd unit
+3. Registers a `smartolt.service` systemd unit
 
 ## Environment Variables Reference
 
@@ -132,7 +126,6 @@ The script:
 | `ALLOWED_HOSTS` | `*` | Comma-separated allowed hostnames |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection URL |
 | `USE_CELERY` | `True` | Enable Celery background tasks |
-| `OLT_DEMO_MODE` | `False` | Simulate device responses |
 | `OLT_SSH_TIMEOUT` | `30` | Telnet session timeout (seconds) |
 | `OLT_SSH_MAX_CONCURRENT` | `50` | Max concurrent Telnet sessions |
 | `CELERY_CONCURRENCY` | `20` | Celery worker concurrency |
@@ -196,15 +189,6 @@ Supported operations per vendor:
 | `/reports/` | HTML reports + CSV export |
 | `/accounts/` | Login, register, profile, user management |
 | `/admin/` | Django admin panel |
-
-## Default Credentials (demo seed)
-
-| Username | Password | Role |
-|----------|----------|------|
-| `admin` | `admin123` | Super Admin |
-| `operator1` | `operator123` | User |
-| `operator2` | `operator123` | User |
-| `viewer1` | `viewer123` | User |
 
 > **Change all passwords before deploying to production.**
 

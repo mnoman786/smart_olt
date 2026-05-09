@@ -133,10 +133,6 @@ CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_CONCURRENCY', 20))
 OLT_SSH_TIMEOUT = int(os.environ.get('OLT_SSH_TIMEOUT', 30))
 OLT_SSH_MAX_CONCURRENT = int(os.environ.get('OLT_SSH_MAX_CONCURRENT', 50))
 
-# ── Demo mode ─────────────────────────────────────────────────────────────────
-# Set OLT_DEMO_MODE=True in .env to simulate device responses without real OLTs
-OLT_DEMO_MODE = os.environ.get('OLT_DEMO_MODE', 'False').lower() in ('true', '1', 'yes')
-
 # ── Celery toggle ─────────────────────────────────────────────────────────────
 # Set USE_CELERY=False in .env to run all tasks synchronously (no Redis needed)
 USE_CELERY = os.environ.get('USE_CELERY', 'True').lower() not in ('false', '0', 'no')

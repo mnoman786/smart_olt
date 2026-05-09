@@ -9,7 +9,6 @@ from __future__ import annotations
 import re
 import socket
 import logging
-import random
 import threading
 import time
 from contextlib import contextmanager
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 _sem = threading.Semaphore(getattr(settings, 'OLT_SSH_MAX_CONCURRENT', 50))
 
-DEMO_MODE: bool = getattr(settings, 'OLT_DEMO_MODE', False)
 TELNET_TIMEOUT: int = getattr(settings, 'OLT_SSH_TIMEOUT', 30)
 
 # CLI prompt endings — most OLT vendors use # or >
@@ -480,38 +478,6 @@ _VENDOR_COMMANDS = {
 _PARSERS = {'ZTE': ZTEParser, 'HUAWEI': HuaweiParser}
 
 
-# ── Demo-mode helpers ─────────────────────────────────────────────────────────
-
-def _demo_olt_stats(olt) -> dict:
-    return {
-        'connected': True,
-        'firmware': 'V2.0.1P2 (demo)',
-        'uptime_seconds': random.randint(86400, 86400 * 30),
-        'cpu_usage': round(random.uniform(10, 65), 1),
-        'memory_usage': round(random.uniform(30, 75), 1),
-        'temperature': round(random.uniform(35, 52), 1),
-        'error': '',
-    }
-
-
-def _demo_optical(ont_id: int) -> dict:
-    rx = round(random.uniform(-30, -16), 2)
-    return {
-        'rx_power': rx,
-        'tx_power': round(random.uniform(1.5, 4.0), 2),
-        'olt_rx_power': round(rx - random.uniform(0.3, 1.5), 2),
-        'distance_m': random.randint(500, 12000),
-    }
-
-
-def _demo_ont_command(command: str) -> dict:
-    return {
-        'success': True,
-        'message': f'[DEMO] {command.replace("_", " ").title()} command simulated.',
-        'output': '',
-    }
-
-
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def provision_ont_sync(olt, ont) -> dict:
@@ -521,18 +487,6 @@ def provision_ont_sync(olt, ont) -> dict:
               ont.vlan, ont.technology, ont.mode ('routing' | 'bridging').
     Returns {success, output, error}.
     """
-    if DEMO_MODE:
-        mode_label = 'routing' if getattr(ont, 'mode', 'routing') != 'bridging' else 'bridging'
-        return {
-            'success': True,
-            'output': (
-                f'[DEMO] ONT {ont.serial_number} provisioned — '
-                f'port {ont.pon_port.board}/{ont.pon_port.port} '
-                f'ID {ont.ont_id}  VLAN {ont.vlan}  mode={mode_label}'
-            ),
-            'error': '',
-        }
-
     vendor  = olt.vendor.upper()
     board   = ont.pon_port.board
     port    = ont.pon_port.port
@@ -670,15 +624,6 @@ def _test_telnet_raw(host: str, port: int, username: str, password: str) -> dict
 
 def test_connection(olt) -> dict:
     """Check OLT reachability via SNMP (sysDescr + sysUpTime GET)."""
-    if DEMO_MODE:
-        return {
-            'connected': True,
-            'vendor': olt.vendor,
-            'firmware': 'V2.0.1P2 (demo)',
-            'latency_ms': random.randint(8, 40),
-            'error': '',
-        }
-
     from .snmp_service import check_olt_status_snmp
     result = check_olt_status_snmp(olt)
     return {
@@ -708,10 +653,7 @@ def poll_olt_stats_sync(olt) -> dict:
         olt.firmware_version = snmp['firmware']
 
     # Try to fetch CPU/memory/temperature via Telnet (best-effort)
-    if DEMO_MODE:
-        metrics = _demo_olt_stats(olt)
-    else:
-        metrics = _fetch_olt_stats(olt)
+    metrics = _fetch_olt_stats(olt)
 
     if metrics.get('connected'):
         olt.cpu_usage    = metrics['cpu_usage']
@@ -765,13 +707,6 @@ def _fetch_olt_stats(olt) -> dict:
 
 
 def poll_port_onts_sync(olt, board: int, port_b: int, port: int) -> list[dict]:
-    if DEMO_MODE:
-        return [
-            {**_demo_optical(i), 'ont_id': i,
-             'status': random.choice(['online', 'online', 'online', 'offline'])}
-            for i in range(1, random.randint(4, 16))
-        ]
-
     try:
         with _telnet_connection(olt) as conn:
             cmds = _VENDOR_COMMANDS[olt.vendor]
@@ -798,9 +733,6 @@ def poll_port_onts_sync(olt, board: int, port_b: int, port: int) -> list[dict]:
 
 
 def send_ont_command_sync(ont, command: str) -> dict:
-    if DEMO_MODE:
-        return _demo_ont_command(command)
-
     olt = ont.olt
     if not ont.pon_port:
         return {'success': False, 'message': 'ONT has no PON port assigned.', 'output': ''}
@@ -831,34 +763,21 @@ def discover_unregistered_onts_sync(olt, pon_port) -> list[dict]:
     from onts.models import ONT
     from .models import DiscoveredONT
 
-    if DEMO_MODE:
-        rng = random.Random(pon_port.pk * 31337)
-        fake_prefix  = 'ZTEG' if olt.vendor == 'ZTE' else '48575443'
-        device_model = 'ZTE-F660' if olt.vendor == 'ZTE' else 'Huawei EG8145V5'
-        stable_serials = [
-            f'{fake_prefix}{rng.randint(10000000, 99999999):08d}' for _ in range(3)
-        ]
-        registered = set(ONT.objects.filter(pon_port=pon_port).values_list('serial_number', flat=True))
-        found = [
-            {'serial_number': s, 'vendor_info': f'{device_model} (demo)'}
-            for s in stable_serials if s not in registered
-        ]
-    else:
-        board  = pon_port.board
-        port_b = 1
-        port   = pon_port.port
-        cmds   = _VENDOR_COMMANDS[olt.vendor]
-        parser = _PARSERS[olt.vendor]
+    board  = pon_port.board
+    port_b = 1
+    port   = pon_port.port
+    cmds   = _VENDOR_COMMANDS[olt.vendor]
+    parser = _PARSERS[olt.vendor]
 
-        try:
-            with _telnet_connection(olt) as conn:
-                cmd    = _fmt(cmds['uncfg_list'], board=board, port_b=port_b, port=port)
-                output = conn.send_command(cmd, timeout=TELNET_TIMEOUT)
-                found  = parser.parse_uncfg_list(output)
-        except Exception as exc:
-            logger.error('discover_unregistered_onts OLT %s port %s/%s: %s',
-                         olt.ip_address, board, port, exc)
-            return []
+    try:
+        with _telnet_connection(olt) as conn:
+            cmd    = _fmt(cmds['uncfg_list'], board=board, port_b=port_b, port=port)
+            output = conn.send_command(cmd, timeout=TELNET_TIMEOUT)
+            found  = parser.parse_uncfg_list(output)
+    except Exception as exc:
+        logger.error('discover_unregistered_onts OLT %s port %s/%s: %s',
+                     olt.ip_address, board, port, exc)
+        return []
 
     registered   = set(ONT.objects.filter(pon_port=pon_port).values_list('serial_number', flat=True))
     unregistered = [f for f in found if f['serial_number'] not in registered]
@@ -953,9 +872,6 @@ def sync_olt_from_device_sync(olt) -> dict:
     from .models import PONPort
     from onts.models import ONT
 
-    if DEMO_MODE:
-        return {'ports_found': 0, 'onts_found': 0, 'error': 'demo mode — no real device'}
-
     cmds   = _VENDOR_COMMANDS.get(olt.vendor, {})
     parser = _PARSERS.get(olt.vendor)
     if not parser or not cmds:
@@ -1018,16 +934,6 @@ def sync_olt_from_device_sync(olt) -> dict:
 
 
 def scan_all_uncfg_sync(olt) -> list[dict]:
-    if DEMO_MODE:
-        rng    = random.Random(olt.pk * 99991)
-        prefix = 'ZTEG' if olt.vendor == 'ZTE' else 'HWTC'
-        return [
-            {'serial_number': f'{prefix}{rng.randint(10000000,99999999):08d}',
-             'vendor_info': f'{prefix} Demo-ONT',
-             'board': 1, 'port': rng.randint(1, 8)}
-            for _ in range(rng.randint(2, 8))
-        ]
-
     cmds   = _VENDOR_COMMANDS.get(olt.vendor, {})
     parser = _PARSERS.get(olt.vendor)
     if not cmds or not parser:

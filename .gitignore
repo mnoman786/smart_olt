@@ -54,6 +54,11 @@ yarn-error.log*
 dist/
 build/
 
+# 🔹 SNMP simulator artifacts (no longer used)
+snmp_data/
+snmp_sim_env/
+snmpsim_log.txt
+
 # 🔹 Misc
 *.swp
 *.swo
