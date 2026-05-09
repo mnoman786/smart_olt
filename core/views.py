@@ -12,8 +12,6 @@ from alerts.models import AlertRule
 
 @login_required
 def dashboard(request):
-    from django.shortcuts import redirect
-    return redirect('olt_list')
     total_olts = OLT.objects.count()
     online_olts = OLT.objects.filter(status='online').count()
     total_onts = ONT.objects.count()

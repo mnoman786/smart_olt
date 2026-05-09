@@ -1,18 +1,11 @@
 """
 SNMP service for OLT monitoring.
 
-Uses puresnmp — a modern, pure-Python SNMP library with no legacy dependencies.
-Install:  pip install puresnmp
+Uses pysnmp — a pure-Python SNMP v1/v2c/v3 library.
+Install:  pip install pysnmp pyasn1
 """
 from __future__ import annotations
-import asyncio
 import logging
-import sys
-
-# ProactorEventLoop (Windows default) leaves UDP sockets dangling on close.
-# SelectorEventLoop handles UDP cleanly and works fine for SNMP polling.
-if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 logger = logging.getLogger(__name__)
 
@@ -36,29 +29,23 @@ HW_ONU_TX_POWER    = '1.3.6.1.4.1.2011.6.128.1.1.2.51.1.3'   # unit: 0.01 dBm
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _run(coro):
-    """Run an async coroutine from sync Django code."""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(asyncio.run, coro).result()
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)
-
-
 def _decode_serial(value) -> str:
     """
     Decode an SNMP OctetString serial number to a printable string.
     Vendors encode as 4 ASCII chars + 4 raw bytes: e.g. HWTC + \\x00\\xaa\\xbb\\x12
     → 'HWTC00AABB12'
+
+    Accepts pysnmp OctetString objects, plain bytes, or strings.
     """
+    # Convert pysnmp OctetString (or any bytes-like) to raw bytes
     if isinstance(value, bytes):
         raw = value
+    elif hasattr(value, '__bytes__'):
+        try:
+            raw = bytes(value)
+        except Exception:
+            raw = value.prettyPrint().encode('ascii', errors='replace')
     elif isinstance(value, str):
-        # puresnmp may return hex string like '0x4857544300AABB12'
         if value.startswith('0x'):
             try:
                 raw = bytes.fromhex(value[2:])
@@ -80,7 +67,7 @@ def _decode_serial(value) -> str:
 
 
 def _to_power(value) -> float:
-    """Convert raw 0.01 dBm integer to float dBm."""
+    """Convert raw 0.01 dBm integer (or pysnmp Integer) to float dBm."""
     try:
         return round(int(value) / 100.0, 2)
     except (TypeError, ValueError):
@@ -107,44 +94,85 @@ def _parse_index(suffix: str) -> tuple[int, int, int, int] | None:
 
 # ── Low-level SNMP calls ──────────────────────────────────────────────────────
 
-def _make_client(host: str, community: str, port: int = 161, timeout: int = 5):
-    from functools import partial
-    from puresnmp import Client, V2C, PyWrapper
-    from puresnmp.transport import send_udp
-    sender = partial(send_udp, timeout=timeout, retries=2)
-    return PyWrapper(Client(host, V2C(community), port=port, sender=sender))
+def _snmp_get(host: str, community: str, oids: list[str],
+              port: int = 161, timeout: int = 5) -> dict[str, object]:
+    """
+    Issue SNMP GET for each OID and return {oid_str: value} mapping.
+    Values are raw pysnmp objects — call int() / bytes() / str() as needed.
+    Uses retries=1 (2 total attempts) for GET — appropriate for reachability checks.
+    """
+    from pysnmp.hlapi import (
+        SnmpEngine, CommunityData, UdpTransportTarget, ContextData,
+        ObjectType, ObjectIdentity, getCmd,
+    )
+    results: dict[str, object] = {}
+    # One shared engine per call avoids repeated transport setup overhead
+    engine = SnmpEngine()
+    auth = CommunityData(community, mpModel=1)   # mpModel=1 → SNMPv2c
+    transport = UdpTransportTarget((host, port), timeout=timeout, retries=1)
+    ctx = ContextData()
 
-
-async def _async_get(host: str, community: str, oids: list[str],
-                     port: int = 161, timeout: int = 5) -> dict[str, any]:
-    client = _make_client(host, community, port, timeout)
-    results = {}
     for oid in oids:
         try:
-            results[oid] = await client.get(oid)
+            errIndication, errStatus, errIndex, varBinds = next(
+                getCmd(engine, auth, transport, ctx, ObjectType(ObjectIdentity(oid)))
+            )
+            if errIndication:
+                logger.debug('SNMP GET %s [%s]: %s', host, oid, errIndication)
+            elif errStatus:
+                logger.debug('SNMP GET %s [%s]: %s at %s',
+                             host, oid, errStatus.prettyPrint(), errIndex)
+            else:
+                for varBind in varBinds:
+                    results[str(varBind[0])] = varBind[1]
         except Exception as exc:
             logger.debug('SNMP GET %s [%s]: %s', host, oid, exc)
+
     return results
-
-
-async def _async_walk(host: str, community: str, base_oid: str,
-                      port: int = 161, timeout: int = 5) -> dict[str, any]:
-    client = _make_client(host, community, port, timeout)
-    results = {}
-    async for varbind in client.walk(base_oid):
-        results[str(varbind.oid)] = varbind.value
-    logger.info('SNMP WALK %s:%s OID %s → %d rows', host, port, base_oid, len(results))
-    return results
-
-
-def _snmp_get(host: str, community: str, oids: list[str],
-              port: int = 161, timeout: int = 5) -> dict[str, any]:
-    return _run(_async_get(host, community, oids, port, timeout))
 
 
 def _snmp_walk(host: str, community: str, base_oid: str,
-               port: int = 161, timeout: int = 5) -> dict[str, any]:
-    return _run(_async_walk(host, community, base_oid, port, timeout))
+               port: int = 161, timeout: int = 5) -> dict[str, object]:
+    """
+    Issue SNMP GETNEXT walk starting from base_oid.
+    Returns {full_oid_str: value} for all OIDs within the subtree.
+
+    retries=0 (single attempt) so a missing OID sub-tree fails in exactly
+    `timeout` seconds instead of timeout × (1+retries).  For walks over
+    large ONU tables use a longer timeout, not more retries.
+    """
+    from pysnmp.hlapi import (
+        SnmpEngine, CommunityData, UdpTransportTarget, ContextData,
+        ObjectType, ObjectIdentity, nextCmd,
+    )
+    results: dict[str, object] = {}
+    engine = SnmpEngine()
+    auth = CommunityData(community, mpModel=1)
+    # retries=0 → one attempt only; avoids 3× wait when OID tree is empty
+    transport = UdpTransportTarget((host, port), timeout=timeout, retries=0)
+    ctx = ContextData()
+
+    try:
+        for errIndication, errStatus, errIndex, varBinds in nextCmd(
+            engine, auth, transport, ctx,
+            ObjectType(ObjectIdentity(base_oid)),
+            lexicographicMode=False,
+        ):
+            if errIndication:
+                logger.debug('SNMP WALK %s [%s]: %s', host, base_oid, errIndication)
+                break
+            elif errStatus:
+                logger.debug('SNMP WALK %s [%s]: %s', host, base_oid,
+                             errStatus.prettyPrint())
+                break
+            else:
+                for varBind in varBinds:
+                    results[str(varBind[0])] = varBind[1]
+    except Exception as exc:
+        logger.debug('SNMP WALK %s [%s]: %s', host, base_oid, exc)
+
+    logger.info('SNMP WALK %s:%s OID %s → %d rows', host, port, base_oid, len(results))
+    return results
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -177,15 +205,26 @@ def get_olt_stats_snmp(olt) -> dict:
     try:
         data = _snmp_get(host, community, [OID_SYS_DESCR, OID_SYS_UPTIME], port=port)
         if not data:
-            return {'connected': False, 'firmware': '', 'uptime_seconds': 0,
-                    'error': 'No SNMP response — check community string and that SNMP is enabled.'}
-        firmware   = str(data.get(OID_SYS_DESCR, ''))
+            return {
+                'connected': False, 'firmware': '', 'uptime_seconds': 0,
+                'error': 'No SNMP response — check community string and that SNMP is enabled.',
+            }
+        firmware_val = data.get(OID_SYS_DESCR, '')
+        firmware = str(firmware_val)[:100] if firmware_val is not None else ''
+
         uptime_raw = data.get(OID_SYS_UPTIME, 0)
         try:
-            uptime_seconds = int(str(uptime_raw).split(' ')[0]) // 100
-        except (ValueError, IndexError):
+            # TimeTicks is in hundredths of a second; int() works on pysnmp TimeTicks
+            uptime_seconds = int(uptime_raw) // 100
+        except (TypeError, ValueError):
             uptime_seconds = 0
-        return {'connected': True, 'firmware': firmware[:100], 'uptime_seconds': uptime_seconds, 'error': ''}
+
+        return {
+            'connected': True,
+            'firmware': firmware,
+            'uptime_seconds': uptime_seconds,
+            'error': '',
+        }
     except Exception as exc:
         logger.error('SNMP stats OLT %s: %s', host, exc)
         return {'connected': False, 'firmware': '', 'uptime_seconds': 0, 'error': str(exc)}
@@ -195,11 +234,22 @@ def get_onu_list_snmp(olt) -> list[dict]:
     """
     Walk the vendor GPON ONU table.
     Returns list of {board, port, ont_id, status, serial_number, rx_power, tx_power, olt_rx_power}.
+
+    Does a single GET reachability check first so that if the device is
+    unreachable we bail after one timeout instead of burning 5 × timeout
+    on the subsequent walks.
     """
     host      = str(olt.ip_address)
     community = olt.snmp_community or 'public'
     port      = getattr(olt, 'snmp_port', 161) or 161
     vendor    = olt.vendor.upper()
+
+    # ── Fast reachability check — one GET, one timeout ────────────────────────
+    probe = _snmp_get(host, community, [OID_SYS_UPTIME], port=port, timeout=5)
+    if not probe:
+        logger.warning('SNMP ONU list: %s not reachable (no response to sysUpTime GET)', host)
+        return []
+
     try:
         if vendor == 'ZTE':
             return _get_onu_list_zte(host, community, port)
@@ -227,13 +277,20 @@ def _get_onu_list_zte(host: str, community: str, port: int = 161) -> list[dict]:
         if not idx:
             continue
         board, slot, pon_port, onu_id = idx
-        status = 'online' if str(state_val).strip() in ('1', 'online') else 'offline'
+
+        try:
+            state_int = int(state_val)
+        except (TypeError, ValueError):
+            state_int = 0
+        status = 'online' if state_int == 1 else 'offline'
+
         results.append({
             'board':         board,
             'port':          pon_port,
             'ont_id':        onu_id,
             'status':        status,
-            'serial_number': _decode_serial(serial_table.get(f'{ZTE_ONU_SERIAL_NUM}.{suffix}', b'')),
+            'serial_number': _decode_serial(
+                serial_table.get(f'{ZTE_ONU_SERIAL_NUM}.{suffix}', b'')),
             'rx_power':      _to_power(rx_table.get(f'{ZTE_ONU_RX_POWER}.{suffix}', 0)),
             'tx_power':      _to_power(tx_table.get(f'{ZTE_ONU_TX_POWER}.{suffix}', 0)),
             'olt_rx_power':  _to_power(olt_rx_table.get(f'{ZTE_ONU_OLT_RX}.{suffix}', 0)),
@@ -254,13 +311,20 @@ def _get_onu_list_huawei(host: str, community: str, port: int = 161) -> list[dic
         if not idx:
             continue
         board, slot, pon_port, onu_id = idx
-        status = 'online' if str(state_val).strip() == '1' else 'offline'
+
+        try:
+            state_int = int(state_val)
+        except (TypeError, ValueError):
+            state_int = 0
+        status = 'online' if state_int == 1 else 'offline'
+
         results.append({
             'board':         board,
             'port':          pon_port,
             'ont_id':        onu_id,
             'status':        status,
-            'serial_number': _decode_serial(serial_table.get(f'{HW_ONU_SERIAL_NUM}.{suffix}', b'')),
+            'serial_number': _decode_serial(
+                serial_table.get(f'{HW_ONU_SERIAL_NUM}.{suffix}', b'')),
             'rx_power':      _to_power(rx_table.get(f'{HW_ONU_RX_POWER}.{suffix}', 0)),
             'tx_power':      _to_power(tx_table.get(f'{HW_ONU_TX_POWER}.{suffix}', 0)),
             'olt_rx_power':  0.0,

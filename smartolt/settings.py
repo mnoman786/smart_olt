@@ -98,7 +98,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/accounts/login/'
-LOGIN_REDIRECT_URL = '/olts/'
+LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
@@ -133,9 +133,24 @@ CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_CONCURRENCY', 20))
 OLT_SSH_TIMEOUT = int(os.environ.get('OLT_SSH_TIMEOUT', 30))
 OLT_SSH_MAX_CONCURRENT = int(os.environ.get('OLT_SSH_MAX_CONCURRENT', 50))
 
+# ── Demo mode ─────────────────────────────────────────────────────────────────
+# Set OLT_DEMO_MODE=True in .env to simulate device responses without real OLTs
+OLT_DEMO_MODE = os.environ.get('OLT_DEMO_MODE', 'False').lower() in ('true', '1', 'yes')
+
 # ── Celery toggle ─────────────────────────────────────────────────────────────
 # Set USE_CELERY=False in .env to run all tasks synchronously (no Redis needed)
 USE_CELERY = os.environ.get('USE_CELERY', 'True').lower() not in ('false', '0', 'no')
+
+# ── Email ─────────────────────────────────────────────────────────────────────
+# Override in .env:  EMAIL_BACKEND, EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER,
+#                    EMAIL_HOST_PASSWORD, EMAIL_USE_TLS, DEFAULT_FROM_EMAIL
+EMAIL_BACKEND   = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST      = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT      = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS   = os.environ.get('EMAIL_USE_TLS', 'True').lower() not in ('false', '0', 'no')
+EMAIL_HOST_USER     = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL  = os.environ.get('DEFAULT_FROM_EMAIL', 'SmartOLT <noreply@smartolt.local>')
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOGGING = {

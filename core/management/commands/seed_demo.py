@@ -75,7 +75,6 @@ class Command(BaseCommand):
                 user.is_superuser = True
                 user.save()
             profile = user.profile
-            profile.role = role
             profile.organization = 'SmartOLT ISP'
             profile.phone = f'+880170{random.randint(1000000, 9999999)}'
             profile.save()

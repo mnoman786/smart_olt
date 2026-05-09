@@ -31,11 +31,21 @@ def poll_olt_stats(self, olt_id: int) -> dict:
     except OLT.DoesNotExist:
         return {'error': f'OLT {olt_id} not found'}
 
+    prev_status = olt.status
     try:
         result = poll_olt_stats_sync(olt)
         logger.info('Polled OLT %s: cpu=%.1f%% mem=%.1f%% temp=%.1f°C',
                     olt.name, result.get('cpu_usage', 0),
                     result.get('memory_usage', 0), result.get('temperature', 0))
+
+        # Re-read status after update and fire alerts
+        olt.refresh_from_db(fields=['status', 'temperature'])
+        from alerts.tasks import check_olt_offline_alert, check_temperature_alerts
+        if olt.status == 'offline' and prev_status != 'offline':
+            check_olt_offline_alert.delay(olt_id)
+        if olt.temperature and olt.temperature > 0:
+            check_temperature_alerts.delay(olt_id)
+
         return result
     except Exception as exc:
         logger.error('poll_olt_stats OLT %s: %s', olt_id, exc)
@@ -61,6 +71,14 @@ def poll_olt_onts(self, olt_id: int) -> dict:
     try:
         count = poll_all_ont_signals_sync(olt)
         logger.info('Polled ONTs for OLT %s: %d updated', olt.name, count)
+
+        # Fire signal + offline alerts for each updated ONT
+        from alerts.tasks import check_signal_alerts, check_ont_offline_alert
+        from onts.models import ONT
+        for ont_pk in ONT.objects.filter(olt=olt).values_list('pk', flat=True):
+            check_signal_alerts.delay(ont_pk)
+            check_ont_offline_alert.delay(ont_pk)
+
         return {'updated': count}
     except Exception as exc:
         logger.error('poll_olt_onts OLT %s: %s', olt_id, exc)
